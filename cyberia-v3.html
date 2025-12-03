@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberZone 2004 - MMO Simulator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --ui-bg: rgba(10, 15, 20, 0.95);
+            --ui-border: 2px solid #445566;
+            --text-color: #aaccff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'VT323', monospace; color: var(--text-color); user-select: none; }
+        
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
+        
+        .panel-box {
+            background: var(--ui-bg);
+            border: 2px solid #556677;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+            padding: 10px;
+            pointer-events: auto;
+        }
+
+        #hud-clock {
+            position: absolute; top: 20px; right: 20px;
+            font-size: 2.5em; letter-spacing: 2px;
+            background: #111; border: 2px solid #555; color: #fff;
+            padding: 5px 15px;
+        }
+
+        #hud-location-box {
+            position: absolute; top: 40%; right: 20px;
+            width: 280px; text-align: right;
+        }
+        #hud-health-bar {
+            width: 100%; height: 15px; background: #222; border: 1px solid #000; margin-bottom: 5px;
+        }
+        #hud-health-fill {
+            width: 100%; height: 100%; background: linear-gradient(90deg, #00ff00, #ffff00);
+        }
+        .loc-title { font-size: 2.2em; margin: 0; line-height: 1; text-transform: uppercase; color: #fff; text-shadow: 2px 2px 0 #000; letter-spacing: 1px;}
+        .loc-sub { font-size: 1.4em; color: #8899aa; }
+
+        #hud-chat { 
+            position: absolute; bottom: 20px; right: 20px; 
+            width: 450px; height: 250px; 
+            display: flex; flex-direction: column;
+        }
+        .chat-tabs { display: flex; gap: 5px; margin-bottom: 5px; }
+        .chat-tab { background: #223344; padding: 2px 10px; font-size: 1.1em; cursor: pointer; border: 1px solid #111; color:#8899aa; }
+        .chat-tab.active { background: #445566; font-weight: bold; color:#fff; }
+        
+        #chat-log { 
+            flex: 1; overflow-y: auto; font-size: 1.2em; 
+            margin-bottom: 5px; border: 2px inset #112233; 
+            padding: 5px; background: rgba(0,0,0,0.8); 
+        }
+        #chat-input { 
+            width: 96%; background: #050a10; border: 2px inset #334455; 
+            color: white; padding: 5px; font-family: inherit; font-size: 1.2em; 
+        }
+
+        #interaction-prompt {
+            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); padding: 5px 15px; border: 1px solid white;
+            color: white; font-size: 1.5em; display: none;
+        }
+
+        #char-creator {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111;
+            display: flex; pointer-events: auto; z-index: 10;
+        }
+        #cc-controls { 
+            width: 340px; padding: 20px; background: #1a1a1a; border-right: 4px solid #333; 
+            color: #ddd; font-family: sans-serif;
+            display: flex; flex-direction: column; gap: 10px;
+            overflow-y: auto;
+        }
+        h2 { border-bottom: 1px solid #555; padding-bottom: 5px; margin: 0; font-size: 1rem; color: #aaa; text-transform: uppercase; }
+        label { font-size: 0.8rem; color: #888; display: block; margin-top: 5px; }
+        .cc-row { display: flex; gap: 5px; }
+        button.cc-btn {
+            background: #333; border: 1px solid #555; color: white; padding: 8px 15px; cursor: pointer; flex: 1;
+        }
+        button.cc-btn:hover { background: #555; }
+        button.cc-btn.active { background: #aa0000; border-color: #ff3333; }
+        button.start-btn {
+            width: 100%; padding: 15px; background: #aa0000; border: none; color: white; font-weight: bold; margin-top: auto; cursor: pointer; border: 2px solid #ff3333; font-size: 1.4em; font-family: 'VT323';
+        }
+        button.start-btn:hover { background: #ff0000; }
+        
+        #cc-preview { flex: 1; background: radial-gradient(circle, #2a2a2a 0%, #000 100%); position: relative;}
+        
+        select, input[type="text"] {
+            width: 100%; padding: 8px; background: #000; border: 1px solid #444; color: white; font-family: inherit;
+        }
+        input[type="range"] { width: 100%; }
+        input[type="color"] { width: 60px; height: 30px; border: 1px solid #444; background: #000; cursor: pointer; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #555; }
+
+        #minimap {
+            position: absolute; top: 20px; left: 20px;
+            width: 180px; height: 180px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #446;
+            pointer-events: auto;
+        }
+        #minimap canvas { width: 100%; height: 100%; }
+
+        #war-status {
+            position: absolute; bottom: 20px; left: 20px;
+            padding: 10px; font-size: 1.2em;
+        }
+        .faction-line { margin: 3px 0; }
+        .faction-red { color: #f66; }
+        .faction-green { color: #6f6; }
+        .faction-blue { color: #66f; }
+
+        #controls-help {
+            position: absolute; bottom: 280px; right: 20px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #446;
+            padding: 10px; font-size: 1.1em;
+            pointer-events: auto;
+        }
+        #controls-help div { margin: 3px 0; }
+        #controls-help span { color: #8af; }
+    </style>
+</head>
+<body>
+
+<div id="char-creator">
+    <div id="cc-controls">
+        <h1 style="color:white; font-family:'VT323'; text-align:center; font-size:2.5em; margin-bottom:10px; text-shadow: 0 0 10px red;">CYBERIA 2004</h1>
+        
+        <h2>Identity</h2>
+        <div>
+            <label>Handle</label>
+            <input type="text" id="cc-username" value="Crimson_V">
+        </div>
+        
+        <h2>Body</h2>
+        <div class="cc-row">
+            <button class="cc-btn active" id="btn-female" onclick="setGender('female')">FEMALE</button>
+            <button class="cc-btn" id="btn-male" onclick="setGender('male')">MALE</button>
+        </div>
+
+        <label>Height</label>
+        <input type="range" id="cc-height" min="0.9" max="1.1" step="0.01" value="1.0">
+        
+        <label>Skin Tone</label>
+        <input type="color" id="cc-skin" value="#ffe0bd">
+
+        <h2>Style</h2>
+        <label>Hair Style</label> 
+        <select id="cc-hair">
+            <option value="2">Anime Bob</option>
+            <option value="1">Spiky</option>
+            <option value="0">Bald</option>
+        </select>
+        
+        <label>Hair Color</label>
+        <input type="color" id="cc-haircolor" value="#aa0000">
+        
+        <label>Jacket Color</label>
+        <input type="color" id="cc-jacket" value="#111111">
+        
+        <label>Top Color</label>
+        <input type="color" id="cc-shirt" value="#990000">
+        
+        <label>Pants Color</label>
+        <input type="color" id="cc-pants" value="#223355">
+
+        <button class="start-btn" onclick="startGame()">JACK IN</button>
+    </div>
+    <div id="cc-preview"></div>
+</div>
+
+<div id="game-ui">
+    <div id="minimap">
+        <canvas id="minimap-canvas" width="180" height="180"></canvas>
+    </div>
+    
+    <div id="hud-clock">18:33:45</div>
+
+    <div id="hud-location-box">
+        <div class="panel-box">
+            <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-size:0.8em; color:#aaa;">
+                <span>HUD v1.0</span> <span>ONLINE</span>
+            </div>
+            <div id="hud-health-bar"><div id="hud-health-fill"></div></div>
+            <h1 class="loc-title" id="hud-location">Neo-Tokyo</h1>
+            <div class="loc-sub" id="hud-coords">Block C-4</div>
+        </div>
+    </div>
+
+    <div id="war-status" class="panel-box">
+        <div style="color:#f88; margin-bottom:5px;">⚔ FACTION WAR</div>
+        <div class="faction-line"><span class="faction-red">Iron Legion:</span> <span id="faction-red-count">0</span></div>
+        <div class="faction-line"><span class="faction-green">Cyber Syndicate:</span> <span id="faction-green-count">0</span></div>
+        <div class="faction-line"><span class="faction-blue">Azure Alliance:</span> <span id="faction-blue-count">0</span></div>
+    </div>
+
+    <div id="hud-chat" class="panel-box">
+        <div class="chat-tabs">
+            <div class="chat-tab active">Global</div>
+            <div class="chat-tab">Local</div>
+            <div class="chat-tab">Log</div>
+        </div>
+        <div id="chat-log"></div>
+        <input type="text" id="chat-input" placeholder="Press Enter to chat...">
+    </div>
+
+    <div id="controls-help">
+        <div><span>WASD</span> - Move</div>
+        <div><span>SHIFT</span> - Run</div>
+        <div><span>MOUSE</span> - Look</div>
+        <div><span>E</span> - Interact</div>
+        <div><span>ENTER</span> - Chat</div>
+    </div>
+
+    <div id="interaction-prompt">[E] INTERACT</div>
+</div>
+
+<script>
+// ============================================
+// CONFIGURATION
+// ============================================
+const CONFIG = {
+    chunkSize: 200,
+    renderDistance: 2,
+    cityThreshold: 0.45,
+    gravity: 40.0,
+    speed: 20.0,
+    runSpeed: 35.0
+};
+
+const FACTIONS = [
+    { name: "Iron Legion", color: 0xcc0000, key: 'red' },
+    { name: "Cyber Syndicate", color: 0x00cc00, key: 'green' },
+    { name: "Azure Alliance", color: 0x0044cc, key: 'blue' }
+];
+
+// ============================================
+// GLOBAL STATE
+// ============================================
+let scene, camera, renderer, clock;
+let player, playerController;
+let worldManager, warManager;
+let isGameActive = false;
+let keys = {};
+let mouse = { x: 0, y: 0 };
+
+// ============================================
+// UTILITIES
+// ============================================
+function hash(x, z) {
+    return Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+}
+
+function seededRandom(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
+// Simplex-like noise for terrain
+function noise2D(x, z) {
+    const X = Math.floor(x) & 255;
+    const Z = Math.floor(z) & 255;
+    const xf = x - Math.floor(x);
+    const zf = z - Math.floor(z);
+    
+    const h00 = hash(X, Z);
+    const h10 = hash(X + 1, Z);
+    const h01 = hash(X, Z + 1);
+    const h11 = hash(X + 1, Z + 1);
+    
+    const u = xf * xf * (3 - 2 * xf);
+    const v = zf * zf * (3 - 2 * zf);
+    
+    return h00 * (1 - u) * (1 - v) + 
+           h10 * u * (1 - v) + 
+           h01 * (1 - u) * v + 
+           h11 * u * v;
+}
+
+function getTerrainHeight(wx, wz) {
+    // Multi-octave noise for natural terrain
+    let height = 0;
+    height += noise2D(wx * 0.02, wz * 0.02) * 8;
+    height += noise2D(wx * 0.05, wz * 0.05) * 4;
+    height += noise2D(wx * 0.1, wz * 0.1) * 2;
+    
+    // Check if in city - flatten terrain there
+    const cx = Math.floor(wx / CONFIG.chunkSize);
+    const cz = Math.floor(wz / CONFIG.chunkSize);
+    const isCity = hash(cx, cz) > CONFIG.cityThreshold;
+    
+    if (isCity) {
+        // Flatten for city
+        return 0.5;
+    }
+    
+    return height;
+}
+
+// ============================================
+// TEXTURE GENERATOR
+// ============================================
+const textureCache = {};
+
+function createTexture(type, colorHex) {
+    const key = type + colorHex;
+    if (textureCache[key]) return textureCache[key];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const color = new THREE.Color(colorHex);
+    
+    ctx.fillStyle = color.getStyle();
+    ctx.fillRect(0, 0, 128, 128);
+
+    if (type === 'asphalt') {
+        for (let i = 0; i < 1500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#222' : '#050505';
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+        }
+    }
+    else if (type === 'concrete') {
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(0, 0, 128, 128);
+        ctx.fillStyle = '#050a15';
+        for (let y = 10; y < 128; y += 25) {
+            for (let x = 10; x < 128; x += 25) {
+                if (Math.random() > 0.2) ctx.fillRect(x, y, 15, 18);
+            }
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 100, 128, 28);
+    }
+    else if (type === 'door') {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, 0, 128, 128);
+        ctx.fillStyle = '#222';
+        ctx.fillRect(10, 10, 108, 108);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(90, 60, 10, 10);
+    }
+    else if (type === 'denim') {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        for (let i = 0; i < 2000; i++) {
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 1, 1);
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(0, 0, 5, 128);
+        ctx.fillRect(123, 0, 5, 128);
+    }
+    else if (type === 'face') {
+        ctx.fillStyle = colorHex || '#ffe0bd';
+        ctx.fillRect(0, 0, 128, 128);
+        // Eyes background
+        ctx.fillStyle = '#111';
+        ctx.fillRect(25, 55, 25, 12);
+        ctx.fillRect(78, 55, 25, 12);
+        // Eye whites
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(27, 57, 21, 8);
+        ctx.fillRect(80, 57, 21, 8);
+        // Pupils
+        ctx.fillStyle = '#000';
+        ctx.fillRect(35, 59, 8, 8);
+        ctx.fillRect(88, 59, 8, 8);
+        // Brows
+        ctx.fillStyle = '#222';
+        ctx.fillRect(25, 48, 25, 3);
+        ctx.fillRect(78, 48, 25, 3);
+        // Mouth
+        ctx.fillStyle = '#aa6666';
+        ctx.fillRect(54, 95, 20, 4);
+    }
+    else if (type === 'jacket_back') {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        for (let i = 0; i < 500; i++) {
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+        }
+        ctx.strokeStyle = '#cc0000';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(64, 64, 35, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#cc0000';
+        ctx.beginPath();
+        ctx.moveTo(64, 40);
+        ctx.lineTo(45, 75);
+        ctx.lineTo(83, 75);
+        ctx.fill();
+    }
+    else if (type === 'leather') {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        for (let i = 0; i < 500; i++) {
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+        }
+    }
+    else if (type === 'checkers') {
+        ctx.fillStyle = '#555';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillRect(64, 64, 64, 64);
+    }
+    else if (type === 'skin') {
+        ctx.fillStyle = colorHex;
+        ctx.fillRect(0, 0, 128, 128);
+    }
+    else if (type === 'grass') {
+        ctx.fillStyle = '#2a4a2a';
+        ctx.fillRect(0, 0, 128, 128);
+        for (let i = 0; i < 500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#1a3a1a' : '#3a5a3a';
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 3, 3);
+        }
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    textureCache[key] = tex;
+    return tex;
+}
+
+// ============================================
+// CHARACTER CLASS
+// ============================================
+class Character {
+    constructor(isPlayer = false) {
+        this.group = new THREE.Group();
+        this.meshGroup = new THREE.Group();
+        this.group.add(this.meshGroup);
+        
+        this.isPlayer = isPlayer;
+        this.params = {
+            gender: 'female',
+            height: 1.0,
+            skin: '#ffe0bd',
+            hair: 2,
+            hairColor: '#aa0000',
+            jacketColor: '#111111',
+            shirtColor: '#990000',
+            pantsColor: '#223355'
+        };
+        
+        this.limbs = {};
+        this.aiState = 'idle';
+        this.aiTimer = 0;
+        this.targetPos = new THREE.Vector3();
+        
+        this.rebuild();
+    }
+
+    rebuild() {
+        while (this.meshGroup.children.length > 0) {
+            this.meshGroup.remove(this.meshGroup.children[0]);
+        }
+
+        const { gender, height, skin, jacketColor, pantsColor, shirtColor } = this.params;
+        const isFemale = gender === 'female';
+        
+        // Materials
+        const tSkin = new THREE.MeshLambertMaterial({ color: skin });
+        const tFace = new THREE.MeshLambertMaterial({ map: createTexture('face', skin) });
+        const tJeans = new THREE.MeshLambertMaterial({ map: createTexture('denim', pantsColor) });
+        const tJacket = new THREE.MeshLambertMaterial({ map: createTexture('leather', jacketColor) });
+        const tJacketBack = new THREE.MeshLambertMaterial({ map: createTexture('jacket_back', jacketColor) });
+        const tShirt = new THREE.MeshLambertMaterial({ color: shirtColor });
+        const tHair = new THREE.MeshLambertMaterial({ color: this.params.hairColor });
+        const tBoots = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const tHolster = new THREE.MeshLambertMaterial({ color: 0x050505 });
+
+        const s = height;
+        
+        // Gender-specific proportions
+        const hipWidth = isFemale ? 0.40 : 0.36;
+        const waistWidth = isFemale ? 0.28 : 0.34;
+        const shoulderWidth = isFemale ? 0.34 : 0.40;
+
+        // Hips - MODEL FACES +Z (forward)
+        const hips = new THREE.Mesh(new THREE.BoxGeometry(hipWidth, 0.22, 0.26), tJeans);
+        hips.position.y = 0.9 * s;
+        this.meshGroup.add(hips);
+        this.limbs.hips = hips;
+
+        // Midriff (narrower for female = hourglass)
+        const midriff = new THREE.Mesh(new THREE.BoxGeometry(waistWidth, 0.12, 0.20), tSkin);
+        midriff.position.y = 0.17;
+        hips.add(midriff);
+
+        // Chest Group
+        const chestGroup = new THREE.Group();
+        chestGroup.position.y = 0.12;
+        midriff.add(chestGroup);
+
+        // Torso/Shirt
+        const torsoWidth = isFemale ? 0.34 : shoulderWidth;
+        const shirt = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, 0.35, 0.22), tShirt);
+        shirt.position.y = 0.1;
+        chestGroup.add(shirt);
+
+        // Female chest detail - box-based, not spheres
+        if (isFemale) {
+            const chestDetail = new THREE.Mesh(
+                new THREE.BoxGeometry(0.28, 0.14, 0.08),
+                tShirt
+            );
+            chestDetail.position.set(0, 0.08, -0.12);
+            chestGroup.add(chestDetail);
+            
+            // Subtle shaping
+            const chestLeft = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.12, 0.06),
+                tShirt
+            );
+            chestLeft.position.set(-0.07, 0.06, -0.14);
+            chestGroup.add(chestLeft);
+            
+            const chestRight = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.12, 0.06),
+                tShirt
+            );
+            chestRight.position.set(0.07, 0.06, -0.14);
+            chestGroup.add(chestRight);
+        }
+
+        // Jacket Back (on +Z side, the back)
+        const jacketBack = new THREE.Mesh(new THREE.BoxGeometry(shoulderWidth + 0.04, 0.38, 0.05), tJacketBack);
+        jacketBack.position.set(0, 0.1, 0.12);
+        chestGroup.add(jacketBack);
+
+        // Jacket Sides
+        const jacketL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.38, 0.28), tJacket);
+        jacketL.position.set(shoulderWidth * 0.5 + 0.02, 0.1, 0);
+        chestGroup.add(jacketL);
+        
+        const jacketR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.38, 0.28), tJacket);
+        jacketR.position.set(-shoulderWidth * 0.5 - 0.02, 0.1, 0);
+        chestGroup.add(jacketR);
+
+        // Collar
+        const collar = new THREE.Mesh(new THREE.BoxGeometry(shoulderWidth + 0.08, 0.08, 0.26), tJacket);
+        collar.position.set(0, 0.3, 0.05);
+        chestGroup.add(collar);
+
+        // Head - Face on -Z side (front)
+        // BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
+        // Index 4 = +Z (back), Index 5 = -Z (front/face)
+        const headMats = [tSkin, tSkin, tSkin, tSkin, tSkin, tFace];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.24), headMats);
+        head.position.y = 0.45;
+        chestGroup.add(head);
+
+        // Hair
+        if (this.params.hair > 0) {
+            const hairGroup = new THREE.Group();
+            head.add(hairGroup);
+
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.26), tHair);
+            cap.position.y = 0.15;
+            hairGroup.add(cap);
+
+            if (this.params.hair == 1) { // Spiky
+                for (let i = 0; i < 5; i++) {
+                    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15, 4), tHair);
+                    spike.position.set((i - 2) * 0.06, 0.22, 0);
+                    spike.rotation.z = (i - 2) * 0.2;
+                    hairGroup.add(spike);
+                }
+            }
+            if (this.params.hair == 2) { // Anime Bob
+                // Back hair (+Z)
+                const back = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.45, 0.08), tHair);
+                back.position.set(0, -0.1, 0.13);
+                hairGroup.add(back);
+                // Sides
+                const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.2), tHair);
+                sideL.position.set(0.14, -0.1, 0.02);
+                hairGroup.add(sideL);
+                const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.2), tHair);
+                sideR.position.set(-0.14, -0.1, 0.02);
+                hairGroup.add(sideR);
+                // Bangs (front, -Z)
+                const bangs = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.05), tHair);
+                bangs.position.set(0, 0.08, -0.13);
+                hairGroup.add(bangs);
+            }
+        }
+
+        // Legs
+        const legWidth = isFemale ? 0.14 : 0.15;
+        const legGeo = new THREE.BoxGeometry(legWidth, 0.85 * s, 0.17);
+
+        const lLeg = new THREE.Mesh(legGeo, tJeans);
+        lLeg.position.set(hipWidth * 0.3, -0.45 * s, 0);
+        hips.add(lLeg);
+        this.limbs.leftLeg = lLeg;
+
+        // Holsters
+        const holsterL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.25, 0.17), tHolster);
+        holsterL.position.set(0.06, 0.1, 0);
+        lLeg.add(holsterL);
+        const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.17), tHolster);
+        strapL.position.y = 0.1;
+        lLeg.add(strapL);
+
+        const rLeg = new THREE.Mesh(legGeo, tJeans);
+        rLeg.position.set(-hipWidth * 0.3, -0.45 * s, 0);
+        hips.add(rLeg);
+        this.limbs.rightLeg = rLeg;
+
+        const holsterR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.25, 0.17), tHolster);
+        holsterR.position.set(-0.06, 0.1, 0);
+        rLeg.add(holsterR);
+        const strapR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.17), tHolster);
+        strapR.position.y = 0.1;
+        rLeg.add(strapR);
+
+        // Boots
+        const bootGeo = new THREE.BoxGeometry(0.17, 0.25, 0.25);
+        const lBoot = new THREE.Mesh(bootGeo, tBoots);
+        lBoot.position.set(0, -0.35 * s, -0.04);
+        lLeg.add(lBoot);
+
+        const rBoot = new THREE.Mesh(bootGeo, tBoots);
+        rBoot.position.set(0, -0.35 * s, -0.04);
+        rLeg.add(rBoot);
+
+        // Arms
+        const armGeo = new THREE.BoxGeometry(0.11, 0.7 * s, 0.11);
+
+        const lArm = new THREE.Mesh(armGeo, tJacket);
+        lArm.position.set(shoulderWidth * 0.5 + 0.06, 0.1, 0);
+        chestGroup.add(lArm);
+        this.limbs.leftArm = lArm;
+        
+        const lGlove = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 0.12), tHolster);
+        lGlove.position.y = -0.3 * s;
+        lArm.add(lGlove);
+
+        const rArm = new THREE.Mesh(armGeo, tJacket);
+        rArm.position.set(-shoulderWidth * 0.5 - 0.06, 0.1, 0);
+        chestGroup.add(rArm);
+        this.limbs.rightArm = rArm;
+        
+        const rGlove = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 0.12), tHolster);
+        rGlove.position.y = -0.3 * s;
+        rArm.add(rGlove);
+
+        // Shadow
+        const shadow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.5, 8),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 })
+        );
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = -0.9 * s + 0.02;
+        hips.add(shadow);
+    }
+
+    animate(speed) {
+        if (!this.limbs.leftLeg) return;
+        const time = Date.now() * 0.015;
+        const angle = Math.sin(time) * Math.min(speed * 0.03, 0.5);
+
+        this.limbs.leftLeg.rotation.x = angle;
+        this.limbs.rightLeg.rotation.x = -angle;
+        this.limbs.leftArm.rotation.x = -angle;
+        this.limbs.rightArm.rotation.x = angle;
+    }
+
+    updateNPC(delta) {
+        if (this.isPlayer) return;
+        this.aiTimer -= delta;
+
+        // Get terrain height at NPC position
+        const terrainY = getTerrainHeight(this.group.position.x, this.group.position.z);
+        this.group.position.y = terrainY;
+
+        if (this.aiState === 'idle') {
+            this.animate(0);
+            if (this.aiTimer <= 0) {
+                this.aiState = 'move';
+                this.aiTimer = 2 + Math.random() * 4;
+                const dist = 30;
+                this.targetPos.set(
+                    this.group.position.x + (Math.random() - 0.5) * dist,
+                    0,
+                    this.group.position.z + (Math.random() - 0.5) * dist
+                );
+            }
+        } else {
+            this.animate(15.0);
+            
+            const dir = new THREE.Vector3()
+                .subVectors(this.targetPos, this.group.position);
+            dir.y = 0;
+            
+            if (dir.length() > 0.5) {
+                dir.normalize();
+                this.group.position.x += dir.x * 6 * delta;
+                this.group.position.z += dir.z * 6 * delta;
+                
+                // Face movement direction - character model faces -Z, so add PI
+                this.group.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI;
+            }
+
+            if (this.group.position.distanceTo(this.targetPos) < 1 || this.aiTimer <= 0) {
+                this.aiState = 'idle';
+                this.aiTimer = 1 + Math.random() * 3;
+            }
+        }
+    }
+}
+
+// ============================================
+// WORLD MANAGER
+// ============================================
+class WorldManager {
+    constructor() {
+        this.chunks = {};
+        this.npcs = [];
+        this.interiors = {};
+        this.pendingChunks = new Set();
+    }
+
+    update(playerPos, delta) {
+        const cx = Math.floor(playerPos.x / CONFIG.chunkSize);
+        const cz = Math.floor(playerPos.z / CONFIG.chunkSize);
+
+        for (let x = -CONFIG.renderDistance; x <= CONFIG.renderDistance; x++) {
+            for (let z = -CONFIG.renderDistance; z <= CONFIG.renderDistance; z++) {
+                const key = `${cx + x},${cz + z}`;
+                if (!this.chunks[key] && !this.pendingChunks.has(key)) {
+                    this.pendingChunks.add(key);
+                    this.generateChunkAsync(cx + x, cz + z, key);
+                }
+            }
+        }
+
+        const keysToRemove = [];
+        Object.keys(this.chunks).forEach(key => {
+            const [kx, kz] = key.split(',').map(Number);
+            if (Math.abs(kx - cx) > CONFIG.renderDistance + 1 ||
+                Math.abs(kz - cz) > CONFIG.renderDistance + 1) {
+                keysToRemove.push(key);
+            }
+        });
+        
+        keysToRemove.forEach(key => {
+            scene.remove(this.chunks[key]);
+            delete this.chunks[key];
+        });
+
+        this.npcs.forEach(npc => npc.updateNPC(delta));
+        this.updateLocationHUD(playerPos, cx, cz);
+    }
+
+    generateChunkAsync(cx, cz, key) {
+        setTimeout(() => {
+            if (this.chunks[key]) {
+                this.pendingChunks.delete(key);
+                return;
+            }
+            
+            const chunk = this.generateChunk(cx, cz);
+            this.chunks[key] = chunk;
+            scene.add(chunk);
+            this.pendingChunks.delete(key);
+        }, 0);
+    }
+
+    generateChunk(cx, cz) {
+        const group = new THREE.Group();
+        const offsetX = cx * CONFIG.chunkSize;
+        const offsetZ = cz * CONFIG.chunkSize;
+        const isCity = hash(cx, cz) > CONFIG.cityThreshold;
+
+        // Create terrain mesh with height variation
+        const segments = 20;
+        const groundGeo = new THREE.PlaneGeometry(CONFIG.chunkSize, CONFIG.chunkSize, segments, segments);
+        const vertices = groundGeo.attributes.position.array;
+        
+        // Apply height to vertices
+        for (let i = 0; i < vertices.length; i += 3) {
+            const localX = vertices[i];
+            const localZ = vertices[i + 1];
+            const worldX = offsetX + localX + CONFIG.chunkSize / 2;
+            const worldZ = offsetZ + localZ + CONFIG.chunkSize / 2;
+            
+            if (isCity) {
+                vertices[i + 2] = 0.5; // Flat for city
+            } else {
+                vertices[i + 2] = getTerrainHeight(worldX, worldZ);
+            }
+        }
+        
+        groundGeo.computeVertexNormals();
+        
+        const groundMat = isCity
+            ? new THREE.MeshLambertMaterial({ map: createTexture('asphalt', '#111') })
+            : new THREE.MeshLambertMaterial({ map: createTexture('grass', '#2a4a2a') });
+
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.set(offsetX + CONFIG.chunkSize / 2, 0, offsetZ + CONFIG.chunkSize / 2);
+        ground.receiveShadow = true;
+        group.add(ground);
+
+        if (isCity) {
+            this.generateCity(group, offsetX, offsetZ, cx, cz);
+        } else {
+            this.generateWilderness(group, offsetX, offsetZ, cx, cz);
+        }
+
+        return group;
+    }
+
+    generateCity(group, ox, oz, cx, cz) {
+        const blockSize = 60;
+        const roadWidth = 25;
+
+        for (let x = 10; x < CONFIG.chunkSize - 10; x += blockSize) {
+            for (let z = 10; z < CONFIG.chunkSize - 10; z += blockSize) {
+                const w = blockSize - roadWidth;
+
+                const sidewalk = new THREE.Mesh(
+                    new THREE.BoxGeometry(w + 2, 1, w + 2),
+                    new THREE.MeshLambertMaterial({ color: 0x333333 })
+                );
+                sidewalk.position.set(ox + x + w / 2, 1, oz + z + w / 2);
+                group.add(sidewalk);
+
+                if (Math.random() > 0.1) {
+                    const h = 80 + Math.random() * 150;
+
+                    const mat = new THREE.MeshLambertMaterial({
+                        map: createTexture('concrete', '#444')
+                    });
+                    const building = new THREE.Mesh(
+                        new THREE.BoxGeometry(w, h, w),
+                        mat
+                    );
+                    building.position.set(ox + x + w / 2, h / 2 + 1.5, oz + z + w / 2);
+                    building.castShadow = true;
+                    group.add(building);
+
+                    // Door on front (-Z side of building)
+                    const doorMat = new THREE.MeshLambertMaterial({
+                        map: createTexture('door', '#444')
+                    });
+                    const door = new THREE.Mesh(
+                        new THREE.PlaneGeometry(8, 12),
+                        doorMat
+                    );
+                    door.position.set(0, -h / 2 + 6, -w / 2 - 0.1);
+                    door.userData = { type: 'door', seed: cx * 1000 + cz * 100 + x + z };
+                    building.add(door);
+
+                    // Streetlamp
+                    const lamp = new THREE.Group();
+                    const pole = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.5, 0.5, 15),
+                        new THREE.MeshLambertMaterial({ color: 0x111111 })
+                    );
+                    pole.position.y = 8;
+                    lamp.add(pole);
+                    
+                    const bulb = new THREE.Mesh(
+                        new THREE.BoxGeometry(4, 1, 2),
+                        new THREE.MeshBasicMaterial({ color: 0xffffaa })
+                    );
+                    bulb.position.set(2, 15.5, 0);
+                    lamp.add(bulb);
+                    lamp.position.set(ox + x + w + 2, 0.5, oz + z + w + 2);
+                    group.add(lamp);
+                }
+            }
+        }
+
+        if (Math.random() > 0.6) {
+            const npc = new Character(false);
+            npc.params.hairColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+            npc.params.jacketColor = '#' + Math.floor(Math.random() * 8388607).toString(16).padStart(6, '0');
+            npc.rebuild();
+            npc.group.position.set(
+                ox + CONFIG.chunkSize / 2 + (Math.random() - 0.5) * 40,
+                0.5,
+                oz + CONFIG.chunkSize / 2 + (Math.random() - 0.5) * 40
+            );
+            group.add(npc.group);
+            this.npcs.push(npc);
+        }
+    }
+
+    generateWilderness(group, ox, oz, cx, cz) {
+        const seed = cx * 10000 + cz;
+
+        const treeCount = 4 + Math.floor(seededRandom(seed) * 6);
+        for (let i = 0; i < treeCount; i++) {
+            const tx = ox + seededRandom(seed + i * 3) * CONFIG.chunkSize;
+            const tz = oz + seededRandom(seed + i * 3 + 1) * CONFIG.chunkSize;
+            const ty = getTerrainHeight(tx, tz);
+            
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.5, 4, 6),
+                new THREE.MeshLambertMaterial({ color: 0x4a3020 })
+            );
+            trunk.position.y = 2;
+            tree.add(trunk);
+            
+            const leaves = new THREE.Mesh(
+                new THREE.ConeGeometry(2.5, 5, 6),
+                new THREE.MeshLambertMaterial({ color: 0x2a5a2a })
+            );
+            leaves.position.y = 6;
+            tree.add(leaves);
+            
+            tree.position.set(tx, ty, tz);
+            group.add(tree);
+        }
+
+        const rockCount = 2 + Math.floor(seededRandom(seed + 100) * 3);
+        for (let i = 0; i < rockCount; i++) {
+            const rx = ox + seededRandom(seed + i * 5 + 200) * CONFIG.chunkSize;
+            const rz = oz + seededRandom(seed + i * 5 + 201) * CONFIG.chunkSize;
+            const ry = getTerrainHeight(rx, rz);
+            
+            const rock = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.8 + Math.random() * 0.5, 0),
+                new THREE.MeshLambertMaterial({ color: 0x666666 })
+            );
+            rock.position.set(rx, ry + 0.4, rz);
+            rock.rotation.set(Math.random(), Math.random(), Math.random());
+            group.add(rock);
+        }
+    }
+
+    createInterior(x, y, z, seed) {
+        const key = `int_${seed}`;
+        if (this.interiors[key]) return;
+
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+
+        const w = 40, h = 15, d = 40;
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(w, d),
+            new THREE.MeshLambertMaterial({ map: createTexture('checkers', '#444') })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        group.add(floor);
+
+        const ceiling = new THREE.Mesh(
+            new THREE.PlaneGeometry(w, d),
+            new THREE.MeshLambertMaterial({ color: 0x111111 })
+        );
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = h;
+        group.add(ceiling);
+
+        const wallMat = new THREE.MeshLambertMaterial({ color: 0x444455, side: THREE.DoubleSide });
+        const walls = [
+            { pos: [0, h / 2, -d / 2], dim: [w, h, 1] },
+            { pos: [0, h / 2, d / 2], dim: [w, h, 1] },
+            { pos: [-w / 2, h / 2, 0], dim: [1, h, d] },
+            { pos: [w / 2, h / 2, 0], dim: [1, h, d] }
+        ];
+        walls.forEach(cfg => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...cfg.dim), wallMat);
+            mesh.position.set(...cfg.pos);
+            group.add(mesh);
+        });
+
+        const exitDoor = new THREE.Mesh(
+            new THREE.BoxGeometry(4, 8, 1),
+            new THREE.MeshLambertMaterial({ color: 0xff0000 })
+        );
+        exitDoor.position.set(0, 4, d / 2 - 2);
+        exitDoor.userData = { type: 'exit' };
+        group.add(exitDoor);
+
+        const light = new THREE.PointLight(0xffaa00, 1, 40);
+        light.position.set(0, h - 2, 0);
+        group.add(light);
+
+        scene.add(group);
+        this.interiors[key] = group;
+    }
+
+    updateLocationHUD(pos, cx, cz) {
+        const isCity = hash(cx, cz) > CONFIG.cityThreshold;
+        const cityNames = ['Neo-Tokyo', 'Cyber City', 'Metro Prime', 'Neon District', 'Grid Zero'];
+        const wildNames = ['Wasteland', 'Dead Zone', 'Outskirts', 'Frontier'];
+
+        const nameIndex = Math.abs(cx + cz * 7) % (isCity ? cityNames.length : wildNames.length);
+        const areaName = isCity ? cityNames[nameIndex] : wildNames[nameIndex];
+
+        const blockLetter = String.fromCharCode(65 + Math.abs(cx % 26));
+        const blockNum = Math.abs(cz % 100);
+
+        document.getElementById('hud-location').textContent = areaName;
+        document.getElementById('hud-coords').textContent = `Block ${blockLetter}-${blockNum}`;
+    }
+}
+
+// ============================================
+// WAR MANAGER
+// ============================================
+class WarManager {
+    constructor() {
+        this.units = [];
+        this.projectiles = [];
+        this.spawnTimer = 0;
+    }
+
+    update(delta, playerPos) {
+        this.spawnTimer += delta;
+
+        if (this.spawnTimer > 8 && this.units.length < 16) {
+            this.spawnTimer = 0;
+            this.spawnSkirmish(playerPos);
+        }
+
+        for (let i = this.units.length - 1; i >= 0; i--) {
+            const unit = this.units[i];
+
+            if (unit.type === 'heli' && unit.rotor) {
+                unit.rotor.rotation.y += delta * 15;
+            }
+
+            const enemy = this.findEnemy(unit);
+            if (enemy) {
+                const dir = new THREE.Vector3()
+                    .subVectors(enemy.mesh.position, unit.mesh.position);
+                dir.y = 0;
+                
+                if (dir.length() > 0.1) {
+                    const targetAngle = Math.atan2(dir.x, dir.z);
+                    unit.mesh.rotation.y = targetAngle;
+                    
+                    const dist = unit.mesh.position.distanceTo(enemy.mesh.position);
+                    if (dist > 50) {
+                        dir.normalize();
+                        unit.mesh.position.x += dir.x * unit.speed * delta;
+                        unit.mesh.position.z += dir.z * unit.speed * delta;
+                    }
+                }
+
+                if (Math.random() < 0.03) {
+                    this.fireProjectile(unit.mesh.position, enemy.mesh.position, FACTIONS[unit.faction].color);
+                    if (Math.random() < 0.08) {
+                        this.destroyUnit(enemy);
+                    }
+                }
+            } else {
+                const forward = new THREE.Vector3(
+                    Math.sin(unit.mesh.rotation.y),
+                    0,
+                    Math.cos(unit.mesh.rotation.y)
+                );
+                unit.mesh.position.add(forward.multiplyScalar(unit.speed * 0.3 * delta));
+            }
+
+            // Ground collision for tanks - snap to terrain
+            if (unit.type === 'tank') {
+                const terrainY = getTerrainHeight(unit.mesh.position.x, unit.mesh.position.z);
+                unit.mesh.position.y = terrainY + 1.25; // Tank half-height
+            }
+
+            if (unit.mesh.position.distanceTo(playerPos) > 500) {
+                scene.remove(unit.mesh);
+                this.units.splice(i, 1);
+            }
+        }
+
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const proj = this.projectiles[i];
+            proj.life -= delta;
+            proj.mesh.material.opacity = proj.life * 3;
+
+            if (proj.life <= 0) {
+                scene.remove(proj.mesh);
+                this.projectiles.splice(i, 1);
+            }
+        }
+
+        this.updateFactionCounts();
+    }
+
+    spawnSkirmish(playerPos) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 120 + Math.random() * 80;
+        const cx = playerPos.x + Math.cos(angle) * dist;
+        const cz = playerPos.z + Math.sin(angle) * dist;
+
+        const f1 = Math.floor(Math.random() * 3);
+        const f2 = (f1 + 1 + Math.floor(Math.random() * 2)) % 3;
+
+        for (let i = 0; i < 2; i++) {
+            this.spawnUnit(f1, cx - 25 + Math.random() * 10, cz + Math.random() * 10);
+            this.spawnUnit(f2, cx + 25 + Math.random() * 10, cz + Math.random() * 10);
+        }
+    }
+
+    spawnUnit(factionIndex, x, z) {
+        const isHeli = Math.random() > 0.6;
+        const faction = FACTIONS[factionIndex];
+        const group = new THREE.Group();
+
+        const colorMat = new THREE.MeshLambertMaterial({ color: faction.color });
+        const grayMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+
+        let rotor = null;
+
+        if (isHeli) {
+            const body = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 8), colorMat);
+            group.add(body);
+
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 6), colorMat);
+            tail.position.z = -5;
+            group.add(tail);
+
+            rotor = new THREE.Mesh(new THREE.BoxGeometry(14, 0.1, 0.8), grayMat);
+            rotor.position.y = 2;
+            group.add(rotor);
+
+            const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 0.3), grayMat);
+            tailRotor.position.set(0, 0.5, -8);
+            group.add(tailRotor);
+
+            group.position.set(x, 70 + Math.random() * 30, z);
+        } else {
+            const body = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 8), colorMat);
+            body.position.y = 1;
+            group.add(body);
+
+            const turret = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 3), colorMat);
+            turret.position.y = 2.6;
+            group.add(turret);
+
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 5, 8), grayMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 2.6, 4);
+            group.add(barrel);
+
+            const trackL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 8), grayMat);
+            trackL.position.set(2.5, 0.75, 0);
+            group.add(trackL);
+
+            const trackR = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 8), grayMat);
+            trackR.position.set(-2.5, 0.75, 0);
+            group.add(trackR);
+
+            // Spawn at terrain height
+            const terrainY = getTerrainHeight(x, z);
+            group.position.set(x, terrainY + 1.25, z);
+        }
+
+        scene.add(group);
+        this.units.push({
+            mesh: group,
+            type: isHeli ? 'heli' : 'tank',
+            faction: factionIndex,
+            speed: isHeli ? 18 : 8,
+            rotor: rotor
+        });
+    }
+
+    findEnemy(unit) {
+        let nearest = null;
+        let nearestDist = Infinity;
+        
+        for (const other of this.units) {
+            if (other.faction !== unit.faction) {
+                const dist = unit.mesh.position.distanceTo(other.mesh.position);
+                if (dist < nearestDist) {
+                    nearest = other;
+                    nearestDist = dist;
+                }
+            }
+        }
+        return nearest;
+    }
+
+    fireProjectile(from, to, color) {
+        const start = from.clone();
+        const end = to.clone();
+        start.y += 2;
+        end.y += 2;
+
+        const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
+        const mat = new THREE.LineBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 1
+        });
+        const line = new THREE.Line(geo, mat);
+        scene.add(line);
+
+        this.projectiles.push({ mesh: line, life: 0.25 });
+    }
+
+    destroyUnit(unit) {
+        const idx = this.units.indexOf(unit);
+        if (idx === -1) return;
+
+        const explosion = new THREE.Mesh(
+            new THREE.SphereGeometry(4, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+        );
+        explosion.position.copy(unit.mesh.position);
+        scene.add(explosion);
+        setTimeout(() => scene.remove(explosion), 150);
+
+        scene.remove(unit.mesh);
+        this.units.splice(idx, 1);
+    }
+
+    updateFactionCounts() {
+        const counts = [0, 0, 0];
+        this.units.forEach(u => counts[u.faction]++);
+
+        document.getElementById('faction-red-count').textContent = counts[0];
+        document.getElementById('faction-green-count').textContent = counts[1];
+        document.getElementById('faction-blue-count').textContent = counts[2];
+    }
+}
+
+// ============================================
+// PLAYER CONTROLLER
+// ============================================
+class PlayerController {
+    constructor() {
+        this.char = new Character(true);
+        scene.add(this.char.group);
+
+        this.yaw = 0;
+        this.pitch = 0;
+        this.savedOutdoorPos = new THREE.Vector3();
+        this.isInInterior = false;
+    }
+
+    update(delta) {
+        const pos = this.char.group.position;
+
+        // Mouse look
+        this.yaw -= mouse.x * 0.002;
+        this.pitch -= mouse.y * 0.002;
+        this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch));
+        mouse.x = 0;
+        mouse.y = 0;
+
+        // Movement
+        const speed = keys['ShiftLeft'] ? CONFIG.runSpeed : CONFIG.speed;
+        let dx = 0, dz = 0;
+
+        if (keys['KeyW']) dz = 1;
+        if (keys['KeyS']) dz = -1;
+        if (keys['KeyA']) dx = -1;
+        if (keys['KeyD']) dx = 1;
+
+        if (dx !== 0 || dz !== 0) {
+            const moveDir = new THREE.Vector3(dx, 0, dz)
+                .normalize()
+                .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+
+            pos.x += moveDir.x * speed * delta;
+            pos.z += moveDir.z * speed * delta;
+            
+            // Character faces camera direction (model faces -Z, so add PI)
+            this.char.group.rotation.y = this.yaw + Math.PI;
+            this.char.animate(speed);
+        } else {
+            this.char.group.rotation.y = this.yaw + Math.PI;
+            this.char.animate(0);
+        }
+
+        // Terrain following
+        if (!this.isInInterior) {
+            const terrainY = getTerrainHeight(pos.x, pos.z);
+            pos.y = terrainY;
+        } else {
+            if (pos.y < 500) pos.y = 500;
+        }
+
+        // Camera behind player
+        const camDist = 7;
+        const camHeight = 3.5;
+
+        camera.position.x = pos.x - Math.sin(this.yaw) * camDist * Math.cos(this.pitch);
+        camera.position.z = pos.z - Math.cos(this.yaw) * camDist * Math.cos(this.pitch);
+        camera.position.y = pos.y + camHeight + Math.sin(this.pitch) * camDist;
+        camera.lookAt(pos.x, pos.y + 1.5, pos.z);
+    }
+
+    interact() {
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+        const intersects = raycaster.intersectObjects(scene.children, true);
+
+        for (const hit of intersects) {
+            if (hit.distance > 15) continue;
+
+            let data = hit.object.userData;
+            if (!data.type && hit.object.parent) {
+                data = hit.object.parent.userData;
+            }
+
+            if (data && data.type === 'door') {
+                this.enterInterior(data.seed);
+                return;
+            } else if (data && data.type === 'exit') {
+                this.exitInterior();
+                return;
+            }
+        }
+
+        logChat('System', 'Nothing to interact with.');
+    }
+
+    enterInterior(seed) {
+        this.savedOutdoorPos.copy(this.char.group.position);
+        const ix = seed * 5000;
+        const iy = 500;
+
+        worldManager.createInterior(ix, iy, ix, seed);
+        this.char.group.position.set(ix, iy + 1, ix);
+        this.isInInterior = true;
+
+        logChat('System', 'Entering building...');
+    }
+
+    exitInterior() {
+        if (this.savedOutdoorPos.lengthSq() > 0) {
+            this.char.group.position.copy(this.savedOutdoorPos);
+            this.char.group.position.z += 5;
+        } else {
+            this.char.group.position.set(0, 0, 0);
+        }
+        this.isInInterior = false;
+
+        logChat('System', 'Exiting building...');
+    }
+}
+
+// ============================================
+// MINIMAP
+// ============================================
+function updateMinimap() {
+    const canvas = document.getElementById('minimap-canvas');
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, 180, 180);
+
+    const playerPos = playerController.char.group.position;
+    const scale = 0.4;
+    const cx = 90;
+    const cy = 90;
+
+    Object.keys(worldManager.chunks).forEach(key => {
+        const [chunkX, chunkZ] = key.split(',').map(Number);
+        const isCity = hash(chunkX, chunkZ) > CONFIG.cityThreshold;
+
+        const screenX = cx + (chunkX * CONFIG.chunkSize + CONFIG.chunkSize / 2 - playerPos.x) * scale / 10;
+        const screenY = cy + (chunkZ * CONFIG.chunkSize + CONFIG.chunkSize / 2 - playerPos.z) * scale / 10;
+
+        ctx.fillStyle = isCity ? '#446' : '#242';
+        ctx.fillRect(screenX - 5, screenY - 5, 10, 10);
+    });
+
+    warManager.units.forEach(unit => {
+        const screenX = cx + (unit.mesh.position.x - playerPos.x) * scale;
+        const screenY = cy + (unit.mesh.position.z - playerPos.z) * scale;
+
+        if (screenX >= 0 && screenX <= 180 && screenY >= 0 && screenY <= 180) {
+            const colors = ['#f44', '#4f4', '#44f'];
+            ctx.fillStyle = colors[unit.faction];
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(
+        cx + Math.sin(playerController.yaw) * 12,
+        cy - Math.cos(playerController.yaw) * 12
+    );
+    ctx.stroke();
+}
+
+// ============================================
+// CHAT
+// ============================================
+function logChat(user, msg) {
+    const log = document.getElementById('chat-log');
+    const div = document.createElement('div');
+
+    const color = user === 'System' ? '#0f0' :
+                  user === 'WarNet' ? '#f00' : '#8cf';
+
+    div.innerHTML = `<span style="color:${color}">[${user}]:</span> ${msg}`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
+// ============================================
+// CHARACTER CREATOR
+// ============================================
+let previewChar, previewRenderer, previewScene, previewCamera;
+
+function initCharCreator() {
+    const container = document.getElementById('cc-preview');
+
+    previewScene = new THREE.Scene();
+    previewScene.background = new THREE.Color(0x333333);
+
+    previewCamera = new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        100
+    );
+    previewCamera.position.set(0, 1.1, 3.5);
+    previewCamera.lookAt(0, 1.0, 0);
+
+    previewRenderer = new THREE.WebGLRenderer({ antialias: true });
+    previewRenderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(previewRenderer.domElement);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(1, 2, 2);
+    previewScene.add(dirLight);
+    previewScene.add(new THREE.AmbientLight(0x555555));
+
+    previewChar = new Character(true);
+    previewScene.add(previewChar.group);
+
+    setupCreatorControls();
+
+    function animatePreview() {
+        if (isGameActive) return;
+        requestAnimationFrame(animatePreview);
+        previewChar.group.rotation.y += 0.01;
+        previewRenderer.render(previewScene, previewCamera);
+    }
+    animatePreview();
+}
+
+function setupCreatorControls() {
+    const controls = {
+        'cc-height': (v) => previewChar.params.height = parseFloat(v),
+        'cc-skin': (v) => previewChar.params.skin = v,
+        'cc-hair': (v) => previewChar.params.hair = parseInt(v),
+        'cc-haircolor': (v) => previewChar.params.hairColor = v,
+        'cc-jacket': (v) => previewChar.params.jacketColor = v,
+        'cc-shirt': (v) => previewChar.params.shirtColor = v,
+        'cc-pants': (v) => previewChar.params.pantsColor = v
+    };
+
+    Object.keys(controls).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', e => {
+                controls[id](e.target.value);
+                previewChar.rebuild();
+            });
+        }
+    });
+}
+
+window.setGender = function(g) {
+    previewChar.params.gender = g;
+    previewChar.rebuild();
+
+    document.getElementById('btn-male').classList.toggle('active', g === 'male');
+    document.getElementById('btn-female').classList.toggle('active', g === 'female');
+};
+
+window.startGame = function() {
+    document.getElementById('char-creator').style.display = 'none';
+    document.getElementById('game-ui').style.display = 'block';
+
+    const username = document.getElementById('cc-username').value || 'Player';
+
+    worldManager = new WorldManager();
+    warManager = new WarManager();
+    playerController = new PlayerController();
+
+    playerController.char.params = { ...previewChar.params };
+    playerController.char.rebuild();
+
+    isGameActive = true;
+    document.body.requestPointerLock();
+
+    logChat('System', `Welcome to Cyberia, ${username}!`);
+    logChat('System', 'A war rages between three factions. Explore the world!');
+    logChat('WarNet', 'ALERT: Combat detected in multiple sectors.');
+
+    gameLoop();
+};
+
+// ============================================
+// MAIN INIT
+// ============================================
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x445566);
+    scene.fog = new THREE.Fog(0x445566, 50, 350);
+
+    camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        500
+    );
+
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.domElement.style.imageRendering = 'pixelated';
+    document.body.appendChild(renderer.domElement);
+
+    const hemi = new THREE.HemisphereLight(0xaabbcc, 0x444422, 0.6);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffffee, 0.8);
+    sun.position.set(100, 200, 100);
+    scene.add(sun);
+
+    clock = new THREE.Clock();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    window.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        if (e.code === 'KeyE' && isGameActive) {
+            playerController.interact();
+        }
+        if (e.code === 'Enter') {
+            const input = document.getElementById('chat-input');
+            if (document.activeElement === input) {
+                if (input.value.trim()) {
+                    const username = document.getElementById('cc-username').value || 'Player';
+                    logChat(username, input.value);
+                    input.value = '';
+                }
+                input.blur();
+                document.body.requestPointerLock();
+            } else {
+                input.focus();
+                document.exitPointerLock();
+            }
+        }
+    });
+
+    window.addEventListener('keyup', e => {
+        keys[e.code] = false;
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (document.pointerLockElement === document.body) {
+            mouse.x = e.movementX;
+            mouse.y = e.movementY;
+        }
+    });
+
+    document.getElementById('game-ui').addEventListener('click', () => {
+        if (isGameActive) {
+            document.body.requestPointerLock();
+        }
+    });
+
+    setInterval(() => {
+        document.getElementById('hud-clock').textContent = new Date().toLocaleTimeString('en-GB');
+    }, 1000);
+
+    initCharCreator();
+}
+
+function gameLoop() {
+    requestAnimationFrame(gameLoop);
+
+    const delta = Math.min(clock.getDelta(), 0.1);
+
+    if (isGameActive) {
+        playerController.update(delta);
+        worldManager.update(playerController.char.group.position, delta);
+        warManager.update(delta, playerController.char.group.position);
+        updateMinimap();
+    }
+
+    renderer.render(scene, camera);
+}
+
+init();
+</script>
+</body>
+</html>
