@@ -1,6 +1,4 @@
-// Auto-generated interactive object library
-// Contains a wide catalog of interactable props used for procedural placement
-
+// Interactive object library - regenerated
 export const INTERACTIVE_OBJECTS = [
     {
         id: 'obj_001',

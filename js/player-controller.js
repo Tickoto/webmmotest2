@@ -116,12 +116,11 @@ export class PlayerController {
 
     scanInteractions() {
         const data = this.interactionManager.findClosest(this.char, this.camera);
-        const prompt = document.getElementById('interaction-prompt');
+        this.hoverTarget = data;
         if (data) {
-            prompt.style.display = 'block';
-            prompt.textContent = `E - ${data.def.name} (${data.def.rarity})`;
+            showInteractionPrompt(`E - ${data.def.name} (${data.def.rarity})`);
         } else {
-            prompt.style.display = 'none';
+            hideInteractionPrompt();
         }
     }
 
@@ -129,21 +128,18 @@ export class PlayerController {
         hideInteractionPanel();
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-
         const intersects = raycaster.intersectObjects(this.scene.children, true);
-
         for (const hit of intersects) {
             if (hit.distance > 15) continue;
-
             let data = hit.object.userData;
-            if (!data.type && hit.object.parent) {
+            if (!data?.type && hit.object.parent) {
                 data = hit.object.parent.userData;
             }
-
-            if (data && data.type === 'door') {
+            if (data?.type === 'door') {
                 this.enterInterior(data.seed);
                 return;
-            } else if (data && data.type === 'exit') {
+            }
+            if (data?.type === 'exit') {
                 this.exitInterior();
                 return;
             } else if (data && data.type === 'interactive') {
@@ -152,6 +148,17 @@ export class PlayerController {
                 document.exitPointerLock();
                 return;
             }
+        }
+
+        if (this.hoverTarget) {
+            const targetState = this.interactionManager.beginInteraction(this.hoverTarget);
+            if (!targetState) return;
+            showInteractionPanel(targetState, (action, target) => this.performAction(action, target), () => hideInteractionPanel());
+            if (targetState.locked) {
+                updateInteractionStatus(`Cooling for ${targetState.remaining}s`);
+                this.logChat('System', `${targetState.def.name} is cooling down (${targetState.remaining}s).`);
+            }
+            return;
         }
 
         this.logChat('System', 'Nothing to interact with.');
@@ -198,5 +205,6 @@ export class PlayerController {
         this.isInInterior = false;
 
         this.logChat('System', 'Exiting building...');
+        hideInteractionPanel();
     }
 }

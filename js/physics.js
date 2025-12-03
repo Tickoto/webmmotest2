@@ -7,6 +7,11 @@ export class PhysicsSystem {
         this.bodies = new Set();
         this.chunkColliders = new Map();
         this.dynamicVolumes = [];
+        this._scratch = {
+            gravity: new THREE.Vector3(0, -CONFIG.gravity, 0),
+            horizontal: new THREE.Vector3(),
+            normal: new THREE.Vector3()
+        };
     }
 
     registerBody(body) {
@@ -115,6 +120,20 @@ export class PhysicsSystem {
         if (speed > body.maxSpeed) {
             body.velocity.setLength(body.maxSpeed);
         }
+    }
+
+    projectOntoPlane(vector, normal) {
+        const dot = vector.dot(normal);
+        return vector.clone().sub(normal.clone().multiplyScalar(dot));
+    }
+
+    sampleGround(position, terrainSampler) {
+        const eps = 0.6;
+        const h = terrainSampler(position.x, position.z);
+        const hx = terrainSampler(position.x + eps, position.z);
+        const hz = terrainSampler(position.x, position.z + eps);
+        const normal = new THREE.Vector3(h - hx, 2 * eps, h - hz).normalize();
+        return { height: h, normal };
     }
 
     applyVolumes(body, delta) {

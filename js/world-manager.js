@@ -93,6 +93,7 @@ export class WorldManager {
         }
 
         groundGeo.computeVertexNormals();
+        this.addSkirt(groundGeo, offsetX, offsetZ);
 
         const groundMat = isCity
             ? new THREE.MeshLambertMaterial({ map: createTexture('asphalt', '#111') })
@@ -257,6 +258,26 @@ export class WorldManager {
             shard.rotation.y = Math.random() * Math.PI;
             group.add(shard);
         }
+    }
+
+    addSkirt(geometry) {
+        const skirtDepth = 20;
+        const positions = geometry.attributes.position.array;
+        const widthSegments = geometry.parameters.widthSegments;
+        const heightSegments = geometry.parameters.heightSegments;
+
+        for (let i = 0; i <= widthSegments; i++) {
+            for (let j = 0; j <= heightSegments; j++) {
+                const idx = (j * (widthSegments + 1) + i) * 3;
+                const isEdge = i === 0 || j === 0 || i === widthSegments || j === heightSegments;
+                if (isEdge) {
+                    positions[idx + 2] -= skirtDepth;
+                }
+            }
+        }
+
+        geometry.attributes.position.needsUpdate = true;
+        geometry.computeVertexNormals();
     }
 
     createInterior(x, y, z, seed) {

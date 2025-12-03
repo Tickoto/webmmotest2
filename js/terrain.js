@@ -100,16 +100,8 @@ function blendedHeight(wx, wz) {
 
     let blended = isCity ? 0.5 : baseHeight(wx, wz) + biomeOffset + waterInfluence;
 
-    const neighbors = [
-        { dx: -1, dz: 0, dist: lx },
-        { dx: 1, dz: 0, dist: chunkSize - lx },
-        { dx: 0, dz: -1, dist: lz },
-        { dx: 0, dz: 1, dist: chunkSize - lz },
-        { dx: -1, dz: -1, dist: Math.min(lx, lz) },
-        { dx: 1, dz: -1, dist: Math.min(chunkSize - lx, lz) },
-        { dx: -1, dz: 1, dist: Math.min(lx, chunkSize - lz) },
-        { dx: 1, dz: 1, dist: Math.min(chunkSize - lx, chunkSize - lz) }
-    ];
+    height = lerp(height, urbanPlateau, blend);
+    height = Math.max(height, -25);
 
     neighbors.forEach(n => {
         if (n.dist > smooth) return;

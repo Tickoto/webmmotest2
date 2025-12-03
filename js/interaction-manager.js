@@ -9,6 +9,7 @@ export class InteractionManager {
         this.objects = new Map();
         this.objectStates = new Map();
         this.heightSampler = (x, z) => 0;
+        this.cooldowns = new Map();
     }
 
     setHeightSampler(fn) {
