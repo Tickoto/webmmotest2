@@ -1,6 +1,7 @@
 import { CONFIG } from './config.js';
-import { getTerrainHeight } from './terrain.js';
+import { sampleTerrain } from './terrain.js';
 import { Character } from './character.js';
+import { hideInteractionPanel, renderInteractionLog, showInteractionPanel, updateStatsHUD } from './ui.js';
 
 export class PlayerController {
     constructor({ scene, camera, worldManager, logChat, keys, mouse, physics, interactionManager, environment }) {
@@ -30,6 +31,12 @@ export class PlayerController {
         this.savedOutdoorPos = new THREE.Vector3();
         this.isInInterior = false;
         this.stamina = CONFIG.maxStamina;
+        this.stats = {
+            health: 100,
+            credits: 120,
+            intel: 0,
+            salvage: 12
+        };
     }
 
     update(delta) {
@@ -77,7 +84,7 @@ export class PlayerController {
             if (pos.y < 500) pos.y = 500;
         }
 
-        const terrainSampler = (x, z) => this.isInInterior ? 500 : getTerrainHeight(x, z);
+        const terrainSampler = (x, z) => this.isInInterior ? { height: 500, normal: new THREE.Vector3(0, 1, 0) } : sampleTerrain(x, z);
         this.physics.step(delta, terrainSampler);
 
         const camDist = 7;
@@ -92,6 +99,7 @@ export class PlayerController {
         this.camera.lookAt(pos.x, pos.y + 1.5, pos.z);
 
         this.scanInteractions();
+        updateStatsHUD(this.stats);
     }
 
     updateStamina(delta, running) {
@@ -118,6 +126,7 @@ export class PlayerController {
     }
 
     interact() {
+        hideInteractionPanel();
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
 
@@ -138,12 +147,31 @@ export class PlayerController {
                 this.exitInterior();
                 return;
             } else if (data && data.type === 'interactive') {
-                this.logChat('System', `${data.def.name}: actions available -> ${data.def.actions.join(', ')}`);
+                const state = this.interactionManager.getState(data.seed);
+                showInteractionPanel(data.def, state, (action) => this.resolveInteraction(data, action));
+                document.exitPointerLock();
                 return;
             }
         }
 
         this.logChat('System', 'Nothing to interact with.');
+    }
+
+    resolveInteraction(data, action) {
+        const outcome = this.interactionManager.performAction(data.def, data.seed, action, this.stats);
+        this.applyOutcome(outcome);
+        return outcome;
+    }
+
+    applyOutcome(outcome) {
+        if (!outcome) return;
+        if (outcome.credits) this.stats.credits = Math.max(0, this.stats.credits + outcome.credits);
+        if (outcome.salvage) this.stats.salvage = Math.max(0, this.stats.salvage + outcome.salvage);
+        if (outcome.intel) this.stats.intel = Math.max(0, this.stats.intel + outcome.intel);
+        if (outcome.stamina) this.stamina = Math.max(0, Math.min(CONFIG.maxStamina, this.stamina + outcome.stamina));
+        if (outcome.health) this.stats.health = Math.max(0, Math.min(100, this.stats.health + outcome.health));
+        if (outcome.log) this.logChat('System', outcome.log);
+        renderInteractionLog(outcome);
     }
 
     enterInterior(seed) {

@@ -47,6 +47,7 @@ export class WorldManager {
         });
 
         this.npcs.forEach(npc => npc.updateNPC(delta));
+        this.interactionManager.update(delta);
         this.updateLocationHUD(playerPos, cx, cz);
     }
 
@@ -71,8 +72,9 @@ export class WorldManager {
         const isCity = hash(cx, cz) > CONFIG.cityThreshold;
         const colliders = [];
 
-        const segments = 40;
-        const groundGeo = new THREE.PlaneGeometry(CONFIG.chunkSize, CONFIG.chunkSize, segments, segments);
+        const segments = 48;
+        const planeSize = CONFIG.chunkSize + CONFIG.chunkOverlap * 2;
+        const groundGeo = new THREE.PlaneGeometry(planeSize, planeSize, segments, segments);
         const vertices = groundGeo.attributes.position.array;
 
         const biome = biomeInfoAtPosition(offsetX, offsetZ);
@@ -80,8 +82,8 @@ export class WorldManager {
         for (let i = 0; i < vertices.length; i += 3) {
             const localX = vertices[i];
             const localZ = vertices[i + 1];
-            const worldX = offsetX + localX + CONFIG.chunkSize / 2;
-            const worldZ = offsetZ + localZ + CONFIG.chunkSize / 2;
+            const worldX = offsetX + CONFIG.chunkSize / 2 + localX;
+            const worldZ = offsetZ + CONFIG.chunkSize / 2 + localZ;
 
             if (isCity) {
                 vertices[i + 2] = 0.5;

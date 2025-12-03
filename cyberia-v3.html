@@ -73,6 +73,49 @@
             color: white; font-size: 1.5em; display: none;
         }
 
+        #interaction-panel {
+            position: absolute;
+            top: 55%; left: 50%; transform: translate(-50%, -50%);
+            width: 520px;
+            background: rgba(5, 8, 12, 0.92);
+            border: 2px solid #55aaff;
+            box-shadow: 0 0 25px rgba(0,0,0,0.8);
+            padding: 15px;
+            display: none;
+            pointer-events: auto;
+            z-index: 3;
+        }
+        #interaction-panel h3 { margin: 0 0 5px 0; color: #fff; }
+        #interaction-panel .sub { color: #a0c6ff; margin-bottom: 8px; }
+        #interaction-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        #interaction-actions button {
+            background: linear-gradient(180deg, #112233, #0b1625);
+            color: #d8ecff;
+            border: 1px solid #2d4f7a;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-family: 'VT323';
+            letter-spacing: 1px;
+        }
+        #interaction-actions button:hover { border-color: #55aaff; color: #fff; }
+        #interaction-log { height: 120px; overflow-y: auto; background: rgba(0,0,0,0.45); border: 1px solid #234; padding: 6px; font-size: 1.1em; }
+        #interaction-log div { margin-bottom: 3px; }
+        #interaction-close { position: absolute; right: 10px; top: 8px; background: #330000; color: #fff; border: 1px solid #aa0000; padding: 4px 8px; cursor: pointer; }
+
+        #resource-panel {
+            position: absolute;
+            top: 220px;
+            left: 20px;
+            width: 200px;
+            padding: 10px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #3a4a63;
+            pointer-events: auto;
+            font-size: 1.2em;
+        }
+        #resource-panel h4 { margin: 0 0 6px 0; color: #d7e7ff; }
+        .res-line { display: flex; justify-content: space-between; margin: 3px 0; color: #9ac7ff; }
+
         #char-creator {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #111;
@@ -191,6 +234,14 @@
     <div id="minimap">
         <canvas id="minimap-canvas" width="180" height="180"></canvas>
     </div>
+
+    <div id="resource-panel" class="panel-box">
+        <h4>Field Readout</h4>
+        <div class="res-line"><span>Health</span> <span id="res-health">100</span></div>
+        <div class="res-line"><span>Credits</span> <span id="res-credits">0</span></div>
+        <div class="res-line"><span>Salvage</span> <span id="res-salvage">0</span></div>
+        <div class="res-line"><span>Intel</span> <span id="res-intel">0</span></div>
+    </div>
     
     <div id="hud-clock">18:33:45</div>
 
@@ -234,6 +285,13 @@
         </div>
 
     <div id="interaction-prompt">[E] INTERACT</div>
+    <div id="interaction-panel">
+        <button id="interaction-close">X</button>
+        <h3 id="interaction-title">Interactive</h3>
+        <div class="sub" id="interaction-meta">--</div>
+        <div id="interaction-actions"></div>
+        <div id="interaction-log"></div>
+    </div>
 </div>
 
 <script type="module" src="./js/main.js"></script>

@@ -1,5 +1,6 @@
 export const CONFIG = {
     chunkSize: 200,
+    chunkOverlap: 6,
     renderDistance: 2,
     cityThreshold: 0.45,
     gravity: 38.5,
@@ -14,6 +15,8 @@ export const CONFIG = {
     airDrag: 0.35,
     slopeLimit: 0.92,
     stepHeight: 0.75,
+    groundSnapMargin: 1.5,
+    groundStickiness: 0.92,
     edgeBlendDistance: 18,
     interactionRange: 18,
     interactionScanAngle: Math.PI / 5,

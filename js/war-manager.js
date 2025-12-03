@@ -63,7 +63,8 @@ export class WarManager {
             // Ground collision for tanks - snap to terrain
             if (unit.type === 'tank') {
                 const terrainY = getTerrainHeight(unit.mesh.position.x, unit.mesh.position.z);
-                unit.mesh.position.y = terrainY + 1.25; // Tank half-height
+                const desired = terrainY + 1.25; // Tank half-height
+                unit.mesh.position.y = THREE.MathUtils.lerp(unit.mesh.position.y, desired, 0.6);
             }
 
             if (unit.mesh.position.distanceTo(playerPos) > 500) {

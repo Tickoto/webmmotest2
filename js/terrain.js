@@ -78,7 +78,14 @@ function riverMask(wx, wz) {
     return Math.pow(1 - flow, 2);
 }
 
-export function getTerrainHeight(wx, wz) {
+function baseHeight(wx, wz) {
+    const coarse = fbm(wx * 0.01, wz * 0.01, 5, 2, 0.45) * 12;
+    const detail = fbm(wx * 0.04, wz * 0.04, 3, 2.7, 0.5) * 2.5;
+    const ridgeHeight = ridge(Math.abs(perlin(wx * 0.02, wz * 0.02))) * 6;
+    return coarse + detail + ridgeHeight;
+}
+
+function blendedHeight(wx, wz) {
     const chunkSize = CONFIG.chunkSize;
     const cx = Math.floor(wx / chunkSize);
     const cz = Math.floor(wz / chunkSize);
@@ -86,19 +93,12 @@ export function getTerrainHeight(wx, wz) {
     const lz = wz - cz * chunkSize;
     const smooth = CONFIG.edgeBlendDistance;
 
-    const baseHeight = fbm(wx * 0.01, wz * 0.01, 5, 2, 0.45) * 12;
-    const detail = fbm(wx * 0.04, wz * 0.04, 3, 2.7, 0.5) * 2.5;
-    const ridgeHeight = ridge(Math.abs(perlin(wx * 0.02, wz * 0.02))) * 6;
-
     const biome = biomeAt(cx, cz);
     const biomeOffset = biome.altitudeBias * 10;
-
     const waterInfluence = riverMask(wx, wz) * -5;
-    let height = baseHeight + detail + ridgeHeight + biomeOffset + waterInfluence;
-
     const isCity = hash(cx, cz) > CONFIG.cityThreshold;
-    const cityHeight = 0.5;
-    let blended = isCity ? cityHeight : height;
+
+    let blended = isCity ? 0.5 : baseHeight(wx, wz) + biomeOffset + waterInfluence;
 
     const neighbors = [
         { dx: -1, dz: 0, dist: lx },
@@ -115,23 +115,32 @@ export function getTerrainHeight(wx, wz) {
         if (n.dist > smooth) return;
         const neighborCity = hash(cx + n.dx, cz + n.dz) > CONFIG.cityThreshold;
         const targetBiome = biomeAt(cx + n.dx, cz + n.dz);
-        const neighborHeight = fbm((wx + n.dx * chunkSize) * 0.01, (wz + n.dz * chunkSize) * 0.01, 5, 2, 0.45) * 12 +
-            fbm((wx + n.dx * chunkSize) * 0.04, (wz + n.dz * chunkSize) * 0.04, 3, 2.7, 0.5) * 2.5 +
-            ridge(Math.abs(perlin((wx + n.dx * chunkSize) * 0.02, (wz + n.dz * chunkSize) * 0.02))) * 6 +
+        const neighborHeight = baseHeight((cx + n.dx) * chunkSize + lx, (cz + n.dz) * chunkSize + lz) +
             targetBiome.altitudeBias * 10 +
             riverMask(wx + n.dx * chunkSize, wz + n.dz * chunkSize) * -5;
 
-        if (neighborCity === isCity) {
-            const t = Math.min(1, n.dist / smooth);
-            blended = neighborHeight + (blended - neighborHeight) * t;
-        } else {
-            const targetHeight = neighborCity ? cityHeight : neighborHeight;
-            const t = Math.min(1, n.dist / smooth);
-            blended = targetHeight + (blended - targetHeight) * t;
-        }
+        const targetHeight = neighborCity ? 0.5 : neighborHeight;
+        const t = Math.min(1, n.dist / smooth);
+        blended = targetHeight + (blended - targetHeight) * t;
     });
 
     return blended;
+}
+
+export function sampleTerrain(wx, wz) {
+    const h = blendedHeight(wx, wz);
+    const eps = 0.35;
+    const hL = blendedHeight(wx - eps, wz);
+    const hR = blendedHeight(wx + eps, wz);
+    const hD = blendedHeight(wx, wz - eps);
+    const hU = blendedHeight(wx, wz + eps);
+    const normal = new THREE.Vector3(hL - hR, 2 * eps, hD - hU);
+    normal.normalize();
+    return { height: h, normal };
+}
+
+export function getTerrainHeight(wx, wz) {
+    return sampleTerrain(wx, wz).height;
 }
 
 export function biomeInfoAtPosition(wx, wz) {
