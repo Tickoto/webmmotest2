@@ -1,10 +1,11 @@
 import { WorldManager } from './world-manager.js';
 import { WarManager } from './war-manager.js';
 import { PlayerController } from './player-controller.js';
+import { PhysicsSystem } from './physics.js';
 import { initCharCreator, logChat, setGender, updateMinimap } from './ui.js';
 
 let scene, camera, renderer, clock;
-let playerController, worldManager, warManager;
+let playerController, worldManager, warManager, physics;
 let isGameActive = false;
 let previewChar;
 const keys = {};
@@ -94,9 +95,10 @@ function startGame() {
 
     const username = document.getElementById('cc-username').value || 'Player';
 
-    worldManager = new WorldManager(scene);
+    physics = new PhysicsSystem();
+    worldManager = new WorldManager(scene, physics);
     warManager = new WarManager(scene);
-    playerController = new PlayerController({ scene, camera, worldManager, logChat, keys, mouse });
+    playerController = new PlayerController({ scene, camera, worldManager, logChat, keys, mouse, physics });
 
     playerController.char.params = { ...previewChar.params };
     playerController.char.rebuild();

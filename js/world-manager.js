@@ -7,12 +7,13 @@ import { Character } from './character.js';
 // WORLD MANAGER
 // ============================================
 export class WorldManager {
-    constructor(scene) {
+    constructor(scene, physics) {
         this.scene = scene;
         this.chunks = {};
         this.npcs = [];
         this.interiors = {};
         this.pendingChunks = new Set();
+        this.physics = physics;
     }
 
     update(playerPos, delta) {
@@ -40,6 +41,7 @@ export class WorldManager {
         
         keysToRemove.forEach(key => {
             this.scene.remove(this.chunks[key]);
+            this.physics.removeChunkColliders(key);
             delete this.chunks[key];
         });
 
@@ -66,6 +68,7 @@ export class WorldManager {
         const offsetX = cx * CONFIG.chunkSize;
         const offsetZ = cz * CONFIG.chunkSize;
         const isCity = hash(cx, cz) > CONFIG.cityThreshold;
+        const colliders = [];
 
         // Create terrain mesh with height variation
         const segments = 20;
@@ -99,15 +102,17 @@ export class WorldManager {
         group.add(ground);
 
         if (isCity) {
-            this.generateCity(group, offsetX, offsetZ, cx, cz);
+            this.generateCity(group, offsetX, offsetZ, cx, cz, colliders);
         } else {
             this.generateWilderness(group, offsetX, offsetZ, cx, cz);
         }
 
+        this.physics.addChunkColliders(`${cx},${cz}`, colliders);
+
         return group;
     }
 
-    generateCity(group, ox, oz, cx, cz) {
+    generateCity(group, ox, oz, cx, cz, colliders) {
         const blockSize = 60;
         const roadWidth = 25;
 
@@ -132,9 +137,18 @@ export class WorldManager {
                         new THREE.BoxGeometry(w, h, w),
                         mat
                     );
-                    building.position.set(ox + x + w / 2, h / 2 + 1.5, oz + z + w / 2);
+                    const centerX = ox + x + w / 2;
+                    const centerZ = oz + z + w / 2;
+
+                    building.position.set(centerX, h / 2 + 1.5, centerZ);
                     building.castShadow = true;
                     group.add(building);
+
+                    const collider = new THREE.Box3().setFromCenterAndSize(
+                        new THREE.Vector3(centerX, h / 2 + 1.5, centerZ),
+                        new THREE.Vector3(w, h, w)
+                    );
+                    colliders.push(collider);
 
                     // Door on front (-Z side of building)
                     const doorMat = new THREE.MeshLambertMaterial({
@@ -144,7 +158,8 @@ export class WorldManager {
                         new THREE.PlaneGeometry(8, 12),
                         doorMat
                     );
-                    door.position.set(0, -h / 2 + 6, -w / 2 - 0.1);
+                    door.position.set(0, -h / 2 + 7, -w / 2 - 0.6);
+                    door.rotation.y = Math.PI;
                     door.userData = { type: 'door', seed: cx * 1000 + cz * 100 + x + z };
                     building.add(door);
 

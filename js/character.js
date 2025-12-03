@@ -209,7 +209,7 @@ export class Character {
         const armGeo = new THREE.BoxGeometry(0.11, 0.7 * s, 0.11);
 
         const lArm = new THREE.Mesh(armGeo, tJacket);
-        lArm.position.set(shoulderWidth * 0.5 + 0.06, 0.1, 0);
+        lArm.position.set(shoulderWidth * 0.5 + 0.06, -0.05, 0);
         chestGroup.add(lArm);
         this.limbs.leftArm = lArm;
         
@@ -218,7 +218,7 @@ export class Character {
         lArm.add(lGlove);
 
         const rArm = new THREE.Mesh(armGeo, tJacket);
-        rArm.position.set(-shoulderWidth * 0.5 - 0.06, 0.1, 0);
+        rArm.position.set(-shoulderWidth * 0.5 - 0.06, -0.05, 0);
         chestGroup.add(rArm);
         this.limbs.rightArm = rArm;
         
