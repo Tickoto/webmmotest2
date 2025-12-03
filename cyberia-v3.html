@@ -43,6 +43,8 @@
         #hud-health-fill {
             width: 100%; height: 100%; background: linear-gradient(90deg, #00ff00, #ffff00);
         }
+        #hud-stamina-bar { width: 100%; height: 12px; background: #111; border: 1px solid #000; margin-bottom: 5px; }
+        #hud-stamina-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #00bbee, #005577); }
         .loc-title { font-size: 2.2em; margin: 0; line-height: 1; text-transform: uppercase; color: #fff; text-shadow: 2px 2px 0 #000; letter-spacing: 1px;}
         .loc-sub { font-size: 1.4em; color: #8899aa; }
 
@@ -198,8 +200,10 @@
                 <span>HUD v1.0</span> <span>ONLINE</span>
             </div>
             <div id="hud-health-bar"><div id="hud-health-fill"></div></div>
+            <div id="hud-stamina-bar"><div id="hud-stamina-fill"></div></div>
             <h1 class="loc-title" id="hud-location">Neo-Tokyo</h1>
             <div class="loc-sub" id="hud-coords">Block C-4</div>
+            <div class="loc-sub" id="hud-environment">Clear skies</div>
         </div>
     </div>
 
@@ -220,13 +224,14 @@
         <input type="text" id="chat-input" placeholder="Press Enter to chat...">
     </div>
 
-    <div id="controls-help">
-        <div><span>WASD</span> - Move</div>
-        <div><span>SHIFT</span> - Run</div>
-        <div><span>MOUSE</span> - Look</div>
-        <div><span>E</span> - Interact</div>
-        <div><span>ENTER</span> - Chat</div>
-    </div>
+        <div id="controls-help">
+            <div><span>WASD</span> - Move</div>
+            <div><span>SHIFT</span> - Run</div>
+            <div><span>CTRL</span> - Crouch</div>
+            <div><span>MOUSE</span> - Look</div>
+            <div><span>E</span> - Interact</div>
+            <div><span>ENTER</span> - Chat</div>
+        </div>
 
     <div id="interaction-prompt">[E] INTERACT</div>
 </div>
