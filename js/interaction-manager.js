@@ -96,6 +96,7 @@ export class InteractionManager {
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(camera.quaternion);
         const raycaster = new THREE.Raycaster(origin, direction, 0, CONFIG.interactionRange);
+        raycaster.camera = camera;
         const hits = raycaster.intersectObjects(Array.from(this.objects.values()).flat(), true);
         if (!hits.length) return null;
 
