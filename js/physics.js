@@ -5,6 +5,11 @@ export class PhysicsSystem {
         this.bodies = new Set();
         this.chunkColliders = new Map();
         this.dynamicVolumes = [];
+        this._scratch = {
+            gravity: new THREE.Vector3(0, -CONFIG.gravity, 0),
+            horizontal: new THREE.Vector3(),
+            normal: new THREE.Vector3()
+        };
     }
 
     registerBody(body) {
@@ -18,7 +23,8 @@ export class PhysicsSystem {
             bounciness: 0.05,
             friction: CONFIG.groundFriction,
             damping: CONFIG.airDrag,
-            slopeLimit: CONFIG.slopeLimit
+            slopeLimit: CONFIG.slopeLimit,
+            groundNormal: new THREE.Vector3(0, 1, 0)
         };
         const merged = Object.assign(defaults, body);
         this.bodies.add(merged);
@@ -58,7 +64,7 @@ export class PhysicsSystem {
     }
 
     integrate(body, delta, terrainSampler) {
-        const gravity = new THREE.Vector3(0, -CONFIG.gravity, 0);
+        const { gravity, horizontal, normal } = this._scratch;
         body.velocity.addScaledVector(gravity, delta);
 
         body.velocity.x *= 1 - body.damping * delta;
@@ -74,20 +80,55 @@ export class PhysicsSystem {
         const colliders = this.getNearbyColliders(body.position);
         this.resolveCollisions(body, colliders);
 
-        const groundHeight = terrainSampler(body.position.x, body.position.z);
-        if (body.position.y < groundHeight) {
-            const penetration = groundHeight - body.position.y;
-            body.position.y = groundHeight;
-            if (body.velocity.y < 0) body.velocity.y = 0;
+        const groundInfo = this.sampleGround(body.position, terrainSampler);
+        body.groundNormal.copy(groundInfo.normal);
+
+        const groundHeight = groundInfo.height;
+        const desiredHeight = groundHeight + 0.05;
+        const penetration = desiredHeight - body.position.y;
+        const movingDownward = body.velocity.y < 0;
+
+        if (penetration > 0 && movingDownward) {
+            body.position.y += penetration;
+            const vertical = body.velocity.y;
+            body.velocity.y = 0;
+
+            horizontal.set(body.velocity.x, 0, body.velocity.z);
+            const slide = this.projectOntoPlane(horizontal, groundInfo.normal);
+            body.velocity.x = slide.x * Math.max(0, 1 - body.friction * delta);
+            body.velocity.z = slide.z * Math.max(0, 1 - body.friction * delta);
             body.grounded = true;
-            body.velocity.x *= Math.max(0, 1 - body.friction * delta);
-            body.velocity.z *= Math.max(0, 1 - body.friction * delta);
-            body.position.y += penetration > CONFIG.stepHeight ? 0 : CONFIG.stepHeight;
+
+            if (vertical < -1 && body.bounciness > 0) {
+                body.velocity.addScaledVector(groundInfo.normal, -vertical * body.bounciness * 0.25);
+            }
+        } else if (penetration > -CONFIG.stepHeight && movingDownward) {
+            body.position.y += Math.max(penetration, 0);
+            body.velocity.y = Math.max(body.velocity.y, -1.5);
+            body.grounded = true;
+        } else if (Math.abs(penetration) < 0.25 && movingDownward) {
+            body.position.y = THREE.MathUtils.lerp(body.position.y, desiredHeight, 0.35);
+            body.velocity.y = Math.max(body.velocity.y, -2.5);
+            body.grounded = true;
         } else {
             body.grounded = false;
         }
 
         this.applyVolumes(body, delta);
+    }
+
+    projectOntoPlane(vector, normal) {
+        const dot = vector.dot(normal);
+        return vector.clone().sub(normal.clone().multiplyScalar(dot));
+    }
+
+    sampleGround(position, terrainSampler) {
+        const eps = 0.6;
+        const h = terrainSampler(position.x, position.z);
+        const hx = terrainSampler(position.x + eps, position.z);
+        const hz = terrainSampler(position.x, position.z + eps);
+        const normal = new THREE.Vector3(h - hx, 2 * eps, h - hz).normalize();
+        return { height: h, normal };
     }
 
     applyVolumes(body, delta) {
@@ -124,15 +165,13 @@ export class PhysicsSystem {
 
                 if (body.velocity) {
                     const normal = new THREE.Vector3(nx, 0, nz);
-                    const bounce = normal.clone().multiplyScalar(body.velocity.dot(normal) * (1 + body.bounciness));
-                    body.velocity.sub(bounce);
-                    body.velocity.multiplyScalar(0.9);
+                    const tangent = this.projectOntoPlane(body.velocity.clone(), normal);
+                    body.velocity.copy(tangent.multiplyScalar(0.65));
                 }
             } else if (distSq <= 0.0001 && radius > 0) {
                 body.position.z += radius * 0.5;
             }
 
-            // Slope rejection
             const slopeNormal = new THREE.Vector3(0, 1, 0);
             const dot = slopeNormal.dot(new THREE.Vector3(0, 1, 0));
             if (dot < body.slopeLimit && body.grounded) {

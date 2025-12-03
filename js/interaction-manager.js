@@ -8,6 +8,7 @@ export class InteractionManager {
         this.objects = new Map();
         this.activePrompt = null;
         this.heightSampler = (x, z) => 0;
+        this.cooldowns = new Map();
     }
 
     setHeightSampler(fn) {
@@ -113,5 +114,59 @@ export class InteractionManager {
         let data = target.object;
         while (data && !data.userData.type && data.parent) data = data.parent;
         return data ? data.userData : null;
+    }
+
+    beginInteraction(target) {
+        if (!target) return null;
+        const cooldownKey = `${target.def.id}_${target.seed}`;
+        const remaining = this.cooldowns.get(cooldownKey) || 0;
+        const now = performance.now();
+        if (remaining > now) {
+            return {
+                def: target.def,
+                seed: target.seed,
+                locked: true,
+                remaining: ((remaining - now) / 1000).toFixed(1)
+            };
+        }
+
+        const readings = this.sampleDiagnostics(target);
+        return { def: target.def, seed: target.seed, readings };
+    }
+
+    sampleDiagnostics(target) {
+        const rng = seededRandom(target.seed);
+        return {
+            integrity: Math.floor(60 + rng * 40),
+            risk: Math.floor(5 + rng * 25),
+            output: (0.5 + rng * 4).toFixed(2)
+        };
+    }
+
+    performAction(target, action) {
+        if (!target) return { message: 'No target available.', locked: false };
+        const cooldownKey = `${target.def.id}_${target.seed}`;
+        const now = performance.now();
+        const lockUntil = this.cooldowns.get(cooldownKey) || 0;
+        if (lockUntil > now) {
+            return { message: `Cooling down (${((lockUntil - now) / 1000).toFixed(1)}s)`, locked: true };
+        }
+
+        const diagnostics = this.sampleDiagnostics(target);
+        const template = target.def.outcomes?.[action] || `${action} executed.`;
+        const message = template
+            .replace('{integrity}', diagnostics.integrity)
+            .replace('{risk}', diagnostics.risk)
+            .replace('{output}', diagnostics.output);
+
+        const cooldownMs = Math.max(3000, target.def.cooldown * 1000 * 0.25);
+        this.cooldowns.set(cooldownKey, now + cooldownMs);
+
+        return {
+            message,
+            locked: false,
+            cooldown: cooldownMs / 1000,
+            diagnostics
+        };
     }
 }

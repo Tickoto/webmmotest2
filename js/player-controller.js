@@ -1,6 +1,7 @@
 import { CONFIG } from './config.js';
 import { getTerrainHeight } from './terrain.js';
 import { Character } from './character.js';
+import { showInteractionPanel, hideInteractionPanel, updateInteractionStatus, showInteractionPrompt, hideInteractionPrompt } from './ui.js';
 
 export class PlayerController {
     constructor({ scene, camera, worldManager, logChat, keys, mouse, physics, interactionManager, environment }) {
@@ -30,6 +31,7 @@ export class PlayerController {
         this.savedOutdoorPos = new THREE.Vector3();
         this.isInInterior = false;
         this.stamina = CONFIG.maxStamina;
+        this.hoverTarget = null;
     }
 
     update(delta) {
@@ -108,42 +110,52 @@ export class PlayerController {
 
     scanInteractions() {
         const data = this.interactionManager.findClosest(this.char, this.camera);
-        const prompt = document.getElementById('interaction-prompt');
+        this.hoverTarget = data;
         if (data) {
-            prompt.style.display = 'block';
-            prompt.textContent = `E - ${data.def.name} (${data.def.rarity})`;
+            showInteractionPrompt(`E - ${data.def.name} (${data.def.rarity})`);
         } else {
-            prompt.style.display = 'none';
+            hideInteractionPrompt();
         }
     }
 
     interact() {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-
         const intersects = raycaster.intersectObjects(this.scene.children, true);
-
         for (const hit of intersects) {
             if (hit.distance > 15) continue;
-
             let data = hit.object.userData;
-            if (!data.type && hit.object.parent) {
+            if (!data?.type && hit.object.parent) {
                 data = hit.object.parent.userData;
             }
-
-            if (data && data.type === 'door') {
+            if (data?.type === 'door') {
                 this.enterInterior(data.seed);
                 return;
-            } else if (data && data.type === 'exit') {
+            }
+            if (data?.type === 'exit') {
                 this.exitInterior();
-                return;
-            } else if (data && data.type === 'interactive') {
-                this.logChat('System', `${data.def.name}: actions available -> ${data.def.actions.join(', ')}`);
                 return;
             }
         }
 
+        if (this.hoverTarget) {
+            const targetState = this.interactionManager.beginInteraction(this.hoverTarget);
+            if (!targetState) return;
+            showInteractionPanel(targetState, (action, target) => this.performAction(action, target), () => hideInteractionPanel());
+            if (targetState.locked) {
+                updateInteractionStatus(`Cooling for ${targetState.remaining}s`);
+                this.logChat('System', `${targetState.def.name} is cooling down (${targetState.remaining}s).`);
+            }
+            return;
+        }
+
         this.logChat('System', 'Nothing to interact with.');
+    }
+
+    performAction(action, target) {
+        const result = this.interactionManager.performAction(target, action);
+        updateInteractionStatus(result.message);
+        this.logChat('System', `${target.def.name}: ${result.message}`);
     }
 
     enterInterior(seed) {
@@ -170,5 +182,6 @@ export class PlayerController {
         this.isInInterior = false;
 
         this.logChat('System', 'Exiting building...');
+        hideInteractionPanel();
     }
 }
