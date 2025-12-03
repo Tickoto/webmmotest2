@@ -1,11 +1,9 @@
-import { CONFIG } from './config.js';
-import { hash, seededRandom, getTerrainHeight } from './terrain.js';
+import { CONFIG, BIOMES } from './config.js';
+import { hash, seededRandom, getTerrainHeight, biomeInfoAtPosition } from './terrain.js';
 import { createTexture } from './textures.js';
 import { Character } from './character.js';
+import { InteractionManager } from './interaction-manager.js';
 
-// ============================================
-// WORLD MANAGER
-// ============================================
 export class WorldManager {
     constructor(scene, physics) {
         this.scene = scene;
@@ -14,6 +12,8 @@ export class WorldManager {
         this.interiors = {};
         this.pendingChunks = new Set();
         this.physics = physics;
+        this.interactionManager = new InteractionManager(scene);
+        this.interactionManager.setHeightSampler((x, z) => getTerrainHeight(x, z));
     }
 
     update(playerPos, delta) {
@@ -38,10 +38,11 @@ export class WorldManager {
                 keysToRemove.push(key);
             }
         });
-        
+
         keysToRemove.forEach(key => {
             this.scene.remove(this.chunks[key]);
             this.physics.removeChunkColliders(key);
+            this.interactionManager.clearForChunk(key);
             delete this.chunks[key];
         });
 
@@ -55,7 +56,7 @@ export class WorldManager {
                 this.pendingChunks.delete(key);
                 return;
             }
-            
+
             const chunk = this.generateChunk(cx, cz);
             this.chunks[key] = chunk;
             this.scene.add(chunk);
@@ -70,30 +71,30 @@ export class WorldManager {
         const isCity = hash(cx, cz) > CONFIG.cityThreshold;
         const colliders = [];
 
-        // Create terrain mesh with height variation
-        const segments = 20;
+        const segments = 40;
         const groundGeo = new THREE.PlaneGeometry(CONFIG.chunkSize, CONFIG.chunkSize, segments, segments);
         const vertices = groundGeo.attributes.position.array;
-        
-        // Apply height to vertices
+
+        const biome = biomeInfoAtPosition(offsetX, offsetZ);
+
         for (let i = 0; i < vertices.length; i += 3) {
             const localX = vertices[i];
             const localZ = vertices[i + 1];
             const worldX = offsetX + localX + CONFIG.chunkSize / 2;
             const worldZ = offsetZ + localZ + CONFIG.chunkSize / 2;
-            
+
             if (isCity) {
-                vertices[i + 2] = 0.5; // Flat for city
+                vertices[i + 2] = 0.5;
             } else {
                 vertices[i + 2] = getTerrainHeight(worldX, worldZ);
             }
         }
-        
+
         groundGeo.computeVertexNormals();
-        
+
         const groundMat = isCity
             ? new THREE.MeshLambertMaterial({ map: createTexture('asphalt', '#111') })
-            : new THREE.MeshLambertMaterial({ map: createTexture('grass', '#2a4a2a') });
+            : new THREE.MeshLambertMaterial({ map: createTexture('grass', biome.primaryColor) });
 
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
@@ -104,11 +105,11 @@ export class WorldManager {
         if (isCity) {
             this.generateCity(group, offsetX, offsetZ, cx, cz, colliders);
         } else {
-            this.generateWilderness(group, offsetX, offsetZ, cx, cz);
+            this.generateWilderness(group, offsetX, offsetZ, cx, cz, biome);
         }
 
         this.physics.addChunkColliders(`${cx},${cz}`, colliders);
-
+        this.interactionManager.generateForChunk(cx, cz);
         return group;
     }
 
@@ -150,7 +151,6 @@ export class WorldManager {
                     );
                     colliders.push(collider);
 
-                    // Door on front (-Z side of building)
                     const doorMat = new THREE.MeshLambertMaterial({
                         map: createTexture('door', '#444')
                     });
@@ -163,7 +163,6 @@ export class WorldManager {
                     door.userData = { type: 'door', seed: cx * 1000 + cz * 100 + x + z };
                     building.add(door);
 
-                    // Streetlamp
                     const lamp = new THREE.Group();
                     const pole = new THREE.Mesh(
                         new THREE.CylinderGeometry(0.5, 0.5, 15),
@@ -171,7 +170,7 @@ export class WorldManager {
                     );
                     pole.position.y = 8;
                     lamp.add(pole);
-                    
+
                     const bulb = new THREE.Mesh(
                         new THREE.BoxGeometry(4, 1, 2),
                         new THREE.MeshBasicMaterial({ color: 0xffffaa })
@@ -199,15 +198,15 @@ export class WorldManager {
         }
     }
 
-    generateWilderness(group, ox, oz, cx, cz) {
+    generateWilderness(group, ox, oz, cx, cz, biome) {
         const seed = cx * 10000 + cz;
 
-        const treeCount = 4 + Math.floor(seededRandom(seed) * 6);
+        const treeCount = 6 + Math.floor(seededRandom(seed) * 12);
         for (let i = 0; i < treeCount; i++) {
             const tx = ox + seededRandom(seed + i * 3) * CONFIG.chunkSize;
             const tz = oz + seededRandom(seed + i * 3 + 1) * CONFIG.chunkSize;
             const ty = getTerrainHeight(tx, tz);
-            
+
             const tree = new THREE.Group();
             const trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.3, 0.5, 4, 6),
@@ -215,24 +214,24 @@ export class WorldManager {
             );
             trunk.position.y = 2;
             tree.add(trunk);
-            
+
             const leaves = new THREE.Mesh(
                 new THREE.ConeGeometry(2.5, 5, 6),
                 new THREE.MeshLambertMaterial({ color: 0x2a5a2a })
             );
             leaves.position.y = 6;
             tree.add(leaves);
-            
+
             tree.position.set(tx, ty, tz);
             group.add(tree);
         }
 
-        const rockCount = 2 + Math.floor(seededRandom(seed + 100) * 3);
+        const rockCount = 3 + Math.floor(seededRandom(seed + 100) * 5);
         for (let i = 0; i < rockCount; i++) {
             const rx = ox + seededRandom(seed + i * 5 + 200) * CONFIG.chunkSize;
             const rz = oz + seededRandom(seed + i * 5 + 201) * CONFIG.chunkSize;
             const ry = getTerrainHeight(rx, rz);
-            
+
             const rock = new THREE.Mesh(
                 new THREE.DodecahedronGeometry(0.8 + Math.random() * 0.5, 0),
                 new THREE.MeshLambertMaterial({ color: 0x666666 })
@@ -240,6 +239,21 @@ export class WorldManager {
             rock.position.set(rx, ry + 0.4, rz);
             rock.rotation.set(Math.random(), Math.random(), Math.random());
             group.add(rock);
+        }
+
+        const biomeColor = new THREE.Color(biome.primaryColor);
+        const shardCount = 4 + Math.floor(seededRandom(seed + 2000) * 6);
+        for (let i = 0; i < shardCount; i++) {
+            const px = ox + seededRandom(seed + i * 11 + 3000) * CONFIG.chunkSize;
+            const pz = oz + seededRandom(seed + i * 11 + 3001) * CONFIG.chunkSize;
+            const py = getTerrainHeight(px, pz);
+            const shard = new THREE.Mesh(
+                new THREE.ConeGeometry(1, 4 + seededRandom(seed + i) * 6, 5),
+                new THREE.MeshStandardMaterial({ color: biomeColor.offsetHSL(0.1, 0.2, 0), metalness: 0.35 })
+            );
+            shard.position.set(px, py + 1, pz);
+            shard.rotation.y = Math.random() * Math.PI;
+            group.add(shard);
         }
     }
 
@@ -299,7 +313,7 @@ export class WorldManager {
     updateLocationHUD(pos, cx, cz) {
         const isCity = hash(cx, cz) > CONFIG.cityThreshold;
         const cityNames = ['Neo-Tokyo', 'Cyber City', 'Metro Prime', 'Neon District', 'Grid Zero'];
-        const wildNames = ['Wasteland', 'Dead Zone', 'Outskirts', 'Frontier'];
+        const wildNames = BIOMES.map(b => b.label);
 
         const nameIndex = Math.abs(cx + cz * 7) % (isCity ? cityNames.length : wildNames.length);
         const areaName = isCity ? cityNames[nameIndex] : wildNames[nameIndex];
@@ -311,5 +325,3 @@ export class WorldManager {
         document.getElementById('hud-coords').textContent = `Block ${blockLetter}-${blockNum}`;
     }
 }
-
-// ============================================

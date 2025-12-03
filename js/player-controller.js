@@ -2,11 +2,8 @@ import { CONFIG } from './config.js';
 import { getTerrainHeight } from './terrain.js';
 import { Character } from './character.js';
 
-// ============================================
-// PLAYER CONTROLLER
-// ============================================
 export class PlayerController {
-    constructor({ scene, camera, worldManager, logChat, keys, mouse, physics }) {
+    constructor({ scene, camera, worldManager, logChat, keys, mouse, physics, interactionManager, environment }) {
         this.scene = scene;
         this.camera = camera;
         this.worldManager = worldManager;
@@ -14,6 +11,8 @@ export class PlayerController {
         this.keys = keys;
         this.mouse = mouse;
         this.physics = physics;
+        this.interactionManager = interactionManager;
+        this.environment = environment;
 
         this.char = new Character(true);
         this.scene.add(this.char.group);
@@ -30,20 +29,21 @@ export class PlayerController {
         this.pitch = 0;
         this.savedOutdoorPos = new THREE.Vector3();
         this.isInInterior = false;
+        this.stamina = CONFIG.maxStamina;
     }
 
     update(delta) {
         const pos = this.char.group.position;
 
-        // Mouse look
-        this.yaw -= this.mouse.x * 0.002;
-        this.pitch -= this.mouse.y * 0.002;
+        this.yaw -= this.mouse.x * 0.0025;
+        this.pitch -= this.mouse.y * 0.0025;
         this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch));
         this.mouse.x = 0;
         this.mouse.y = 0;
 
-        // Movement
-        const speed = this.keys['ShiftLeft'] ? CONFIG.runSpeed : CONFIG.speed;
+        const running = this.keys['ShiftLeft'] && this.stamina > 0;
+        const crouching = this.keys['ControlLeft'];
+        const speed = crouching ? CONFIG.crouchSpeed : running ? CONFIG.runSpeed : CONFIG.speed;
         let dx = 0, dz = 0;
 
         if (this.keys['KeyW']) dz = 1;
@@ -68,9 +68,10 @@ export class PlayerController {
             this.physicsBody.grounded = false;
         }
 
-        // Face camera direction (model faces -Z, so add PI)
         this.char.group.rotation.y = this.yaw + Math.PI;
         this.char.animate(targetVel.length());
+
+        this.updateStamina(delta, running);
 
         if (this.isInInterior) {
             if (pos.y < 500) pos.y = 500;
@@ -79,14 +80,41 @@ export class PlayerController {
         const terrainSampler = (x, z) => this.isInInterior ? 500 : getTerrainHeight(x, z);
         this.physics.step(delta, terrainSampler);
 
-        // Camera behind player
         const camDist = 7;
-        const camHeight = 3.5;
+        const camHeight = crouching ? 2.5 : 3.5;
 
-        this.camera.position.x = pos.x - Math.sin(this.yaw) * camDist * Math.cos(this.pitch);
-        this.camera.position.z = pos.z - Math.cos(this.yaw) * camDist * Math.cos(this.pitch);
-        this.camera.position.y = pos.y + camHeight + Math.sin(this.pitch) * camDist;
+        const desiredPos = new THREE.Vector3(
+            pos.x - Math.sin(this.yaw) * camDist * Math.cos(this.pitch),
+            pos.y + camHeight + Math.sin(this.pitch) * camDist,
+            pos.z - Math.cos(this.yaw) * camDist * Math.cos(this.pitch)
+        );
+        this.camera.position.lerp(desiredPos, CONFIG.cameraLag);
         this.camera.lookAt(pos.x, pos.y + 1.5, pos.z);
+
+        this.scanInteractions();
+    }
+
+    updateStamina(delta, running) {
+        if (running && this.physicsBody.velocity.lengthSq() > 0.01) {
+            this.stamina = Math.max(0, this.stamina - CONFIG.staminaDrainRate * delta);
+        } else {
+            this.stamina = Math.min(CONFIG.maxStamina, this.stamina + CONFIG.staminaRecoveryRate * delta);
+        }
+        const bar = document.getElementById('hud-stamina-fill');
+        if (bar) {
+            bar.style.width = `${(this.stamina / CONFIG.maxStamina) * 100}%`;
+        }
+    }
+
+    scanInteractions() {
+        const data = this.interactionManager.findClosest(this.char, this.camera);
+        const prompt = document.getElementById('interaction-prompt');
+        if (data) {
+            prompt.style.display = 'block';
+            prompt.textContent = `E - ${data.def.name} (${data.def.rarity})`;
+        } else {
+            prompt.style.display = 'none';
+        }
     }
 
     interact() {
@@ -108,6 +136,9 @@ export class PlayerController {
                 return;
             } else if (data && data.type === 'exit') {
                 this.exitInterior();
+                return;
+            } else if (data && data.type === 'interactive') {
+                this.logChat('System', `${data.def.name}: actions available -> ${data.def.actions.join(', ')}`);
                 return;
             }
         }
@@ -141,5 +172,3 @@ export class PlayerController {
         this.logChat('System', 'Exiting building...');
     }
 }
-
-// ============================================
