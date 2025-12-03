@@ -62,12 +62,8 @@ export class WarManager {
 
             if (unit.type === 'tank') {
                 const terrainY = getTerrainHeight(unit.mesh.position.x, unit.mesh.position.z);
-                const desiredY = terrainY + 1.25;
-                if (unit.mesh.position.y < desiredY - 0.05) {
-                    unit.mesh.position.y = desiredY;
-                } else {
-                    unit.mesh.position.y = THREE.MathUtils.lerp(unit.mesh.position.y, desiredY, 0.35);
-                }
+                const desired = terrainY + 1.25; // Tank half-height
+                unit.mesh.position.y = THREE.MathUtils.lerp(unit.mesh.position.y, desired, 0.6);
             }
 
             if (unit.mesh.position.distanceTo(playerPos) > 500) {

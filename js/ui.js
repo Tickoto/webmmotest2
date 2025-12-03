@@ -16,6 +16,61 @@ export function logChat(user, msg) {
     log.scrollTop = log.scrollHeight;
 }
 
+export function updateStatsHUD(stats) {
+    const map = [
+        ['res-health', stats.health.toFixed(0)],
+        ['res-credits', Math.max(0, Math.floor(stats.credits)).toLocaleString()],
+        ['res-salvage', Math.max(0, Math.floor(stats.salvage)).toString()],
+        ['res-intel', Math.max(0, Math.floor(stats.intel)).toString()]
+    ];
+    map.forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    });
+}
+
+export function showInteractionPanel(def, state, onAction) {
+    const panel = document.getElementById('interaction-panel');
+    const title = document.getElementById('interaction-title');
+    const meta = document.getElementById('interaction-meta');
+    const actions = document.getElementById('interaction-actions');
+    const log = document.getElementById('interaction-log');
+
+    if (!panel) return;
+
+    panel.style.display = 'block';
+    title.textContent = def.name;
+    meta.textContent = `${def.rarity.toUpperCase()} · ${def.category} · Cooldown: ${state.cooldown.toFixed(1)}s`;
+    actions.innerHTML = '';
+    log.innerHTML = '';
+
+    def.actions.forEach(action => {
+        const btn = document.createElement('button');
+        btn.textContent = action.toUpperCase();
+        btn.addEventListener('click', () => {
+            const result = onAction(action);
+            if (result) renderInteractionLog(result);
+        });
+        actions.appendChild(btn);
+    });
+
+    document.getElementById('interaction-close')?.addEventListener('click', hideInteractionPanel, { once: true });
+}
+
+export function renderInteractionLog(outcome) {
+    const log = document.getElementById('interaction-log');
+    if (!log) return;
+    const row = document.createElement('div');
+    row.textContent = outcome.log || 'No response.';
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+}
+
+export function hideInteractionPanel() {
+    const panel = document.getElementById('interaction-panel');
+    if (panel) panel.style.display = 'none';
+}
+
 export function updateMinimap(playerController, worldManager, warManager) {
     const canvas = document.getElementById('minimap-canvas');
     const ctx = canvas.getContext('2d');

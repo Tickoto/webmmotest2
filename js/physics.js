@@ -1,5 +1,7 @@
 import { CONFIG } from './config.js';
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 export class PhysicsSystem {
     constructor() {
         this.bodies = new Set();
@@ -20,11 +22,11 @@ export class PhysicsSystem {
             radius: 0.5,
             height: 1.6,
             grounded: false,
-            bounciness: 0.05,
+            bounciness: 0.02,
             friction: CONFIG.groundFriction,
             damping: CONFIG.airDrag,
             slopeLimit: CONFIG.slopeLimit,
-            groundNormal: new THREE.Vector3(0, 1, 0)
+            maxSpeed: 75
         };
         const merged = Object.assign(defaults, body);
         this.bodies.add(merged);
@@ -60,61 +62,64 @@ export class PhysicsSystem {
     }
 
     step(delta, terrainSampler) {
-        this.bodies.forEach(body => this.integrate(body, delta, terrainSampler));
+        const subSteps = Math.max(1, Math.ceil(delta / 0.016));
+        const stepDelta = delta / subSteps;
+        for (let i = 0; i < subSteps; i++) {
+            this.bodies.forEach(body => this.integrate(body, stepDelta, terrainSampler));
+        }
     }
 
     integrate(body, delta, terrainSampler) {
-        const { gravity, horizontal, normal } = this._scratch;
-        body.velocity.addScaledVector(gravity, delta);
+        const terrain = terrainSampler(body.position.x, body.position.z);
+        const groundHeight = terrain.height ?? terrain;
+        const groundNormal = terrain.normal ?? UP;
 
+        body.velocity.y -= CONFIG.gravity * delta;
         body.velocity.x *= 1 - body.damping * delta;
         body.velocity.z *= 1 - body.damping * delta;
 
-        const speed = body.velocity.length();
-        if (speed > CONFIG.terminalVelocity) {
-            body.velocity.setLength(CONFIG.terminalVelocity);
-        }
-
-        body.position.addScaledVector(body.velocity, delta);
+        const proposed = body.velocity.clone().multiplyScalar(delta);
+        body.position.add(proposed);
 
         const colliders = this.getNearbyColliders(body.position);
         this.resolveCollisions(body, colliders);
 
-        const groundInfo = this.sampleGround(body.position, terrainSampler);
-        body.groundNormal.copy(groundInfo.normal);
+        const surface = terrainSampler(body.position.x, body.position.z);
+        const snapHeight = surface.height ?? surface;
+        const snapNormal = surface.normal ?? groundNormal;
 
-        const groundHeight = groundInfo.height;
-        const desiredHeight = groundHeight + 0.05;
-        const penetration = desiredHeight - body.position.y;
-        const movingDownward = body.velocity.y < 0;
-
-        if (penetration > 0 && movingDownward) {
-            body.position.y += penetration;
-            const vertical = body.velocity.y;
-            body.velocity.y = 0;
-
-            horizontal.set(body.velocity.x, 0, body.velocity.z);
-            const slide = this.projectOntoPlane(horizontal, groundInfo.normal);
-            body.velocity.x = slide.x * Math.max(0, 1 - body.friction * delta);
-            body.velocity.z = slide.z * Math.max(0, 1 - body.friction * delta);
+        const distanceToGround = body.position.y - snapHeight;
+        if (distanceToGround <= CONFIG.groundSnapMargin) {
             body.grounded = true;
-
-            if (vertical < -1 && body.bounciness > 0) {
-                body.velocity.addScaledVector(groundInfo.normal, -vertical * body.bounciness * 0.25);
-            }
-        } else if (penetration > -CONFIG.stepHeight && movingDownward) {
-            body.position.y += Math.max(penetration, 0);
-            body.velocity.y = Math.max(body.velocity.y, -1.5);
-            body.grounded = true;
-        } else if (Math.abs(penetration) < 0.25 && movingDownward) {
-            body.position.y = THREE.MathUtils.lerp(body.position.y, desiredHeight, 0.35);
-            body.velocity.y = Math.max(body.velocity.y, -2.5);
-            body.grounded = true;
+            body.position.y = snapHeight + 0.05;
+            this.alignVelocityToNormal(body, snapNormal, delta);
         } else {
             body.grounded = false;
         }
 
         this.applyVolumes(body, delta);
+        this.capSpeed(body);
+    }
+
+    alignVelocityToNormal(body, normal, delta) {
+        const v = body.velocity.clone();
+        const normalComponent = normal.clone().multiplyScalar(v.dot(normal));
+        const tangential = v.sub(normalComponent);
+
+        if (normal.dot(UP) < body.slopeLimit) {
+            tangential.multiplyScalar(0.3);
+        }
+
+        tangential.multiplyScalar(1 - body.friction * delta * CONFIG.groundStickiness);
+        body.velocity.copy(tangential);
+        if (body.velocity.y > 0) body.velocity.y = 0;
+    }
+
+    capSpeed(body) {
+        const speed = body.velocity.length();
+        if (speed > body.maxSpeed) {
+            body.velocity.setLength(body.maxSpeed);
+        }
     }
 
     projectOntoPlane(vector, normal) {
@@ -143,9 +148,10 @@ export class PhysicsSystem {
         const radius = body.radius || 0.5;
         const height = body.height || 1.6;
         const bodyTop = body.position.y + height;
+        const bodyBottom = body.position.y;
 
         for (const box of colliders) {
-            if (body.position.y > box.max.y || bodyTop < box.min.y) continue;
+            if (bodyTop < box.min.y || bodyBottom > box.max.y) continue;
 
             const closestX = Math.max(box.min.x, Math.min(body.position.x, box.max.x));
             const closestZ = Math.max(box.min.z, Math.min(body.position.z, box.max.z));
@@ -156,27 +162,27 @@ export class PhysicsSystem {
 
             if (distSq < radius * radius && distSq > 0.0001) {
                 const dist = Math.sqrt(distSq);
-                const push = radius - dist;
+                const push = radius - dist + 0.001;
                 const nx = dx / dist;
                 const nz = dz / dist;
 
                 body.position.x += nx * push;
                 body.position.z += nz * push;
 
-                if (body.velocity) {
-                    const normal = new THREE.Vector3(nx, 0, nz);
-                    const tangent = this.projectOntoPlane(body.velocity.clone(), normal);
-                    body.velocity.copy(tangent.multiplyScalar(0.65));
+                const normal = new THREE.Vector3(nx, 0, nz);
+                const velDot = body.velocity.dot(normal);
+                if (velDot < 0) {
+                    body.velocity.sub(normal.multiplyScalar(velDot));
+                    body.velocity.multiplyScalar(0.85);
                 }
             } else if (distSq <= 0.0001 && radius > 0) {
                 body.position.z += radius * 0.5;
             }
 
-            const slopeNormal = new THREE.Vector3(0, 1, 0);
-            const dot = slopeNormal.dot(new THREE.Vector3(0, 1, 0));
-            if (dot < body.slopeLimit && body.grounded) {
-                body.velocity.x *= 0.5;
-                body.velocity.z *= 0.5;
+            if (bodyBottom < box.max.y && bodyBottom > box.min.y) {
+                body.position.y = box.max.y + 0.05;
+                body.velocity.y = Math.max(0, body.velocity.y);
+                body.grounded = true;
             }
         }
     }

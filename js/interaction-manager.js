@@ -1,18 +1,25 @@
 import { CONFIG } from './config.js';
 import { INTERACTIVE_OBJECTS } from './interactive-objects.js';
 import { seededRandom } from './terrain.js';
+import { evaluateAction } from './interaction-actions.js';
 
 export class InteractionManager {
     constructor(scene) {
         this.scene = scene;
         this.objects = new Map();
-        this.activePrompt = null;
+        this.objectStates = new Map();
         this.heightSampler = (x, z) => 0;
         this.cooldowns = new Map();
     }
 
     setHeightSampler(fn) {
         this.heightSampler = fn;
+    }
+
+    update(delta) {
+        this.objectStates.forEach(state => {
+            state.cooldown = Math.max(0, state.cooldown - delta);
+        });
     }
 
     generateForChunk(cx, cz) {
@@ -71,17 +78,22 @@ export class InteractionManager {
         label.position.y = (body.geometry.parameters.height || 4) + 1.25;
         group.add(label);
 
+        const status = this.makeLabel(def.flavor, def.rarity, 20);
+        status.position.y = (body.geometry.parameters.height || 4) + 2.5;
+        status.scale.set(5, 1.1, 1);
+        group.add(status);
+
         return group;
     }
 
-    makeLabel(text, rarity) {
+    makeLabel(text, rarity, size = 28) {
         const canvas = document.createElement('canvas');
         canvas.width = 256;
         canvas.height = 64;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = '28px "VT323"';
+        ctx.font = `${size}px "VT323"`;
         ctx.fillStyle = rarity === 'legendary' ? '#f4c542' : '#aeeaff';
         ctx.fillText(text, 12, 42);
 
@@ -116,57 +128,26 @@ export class InteractionManager {
         return data ? data.userData : null;
     }
 
-    beginInteraction(target) {
-        if (!target) return null;
-        const cooldownKey = `${target.def.id}_${target.seed}`;
-        const remaining = this.cooldowns.get(cooldownKey) || 0;
-        const now = performance.now();
-        if (remaining > now) {
-            return {
-                def: target.def,
-                seed: target.seed,
-                locked: true,
-                remaining: ((remaining - now) / 1000).toFixed(1)
-            };
+    getState(seed) {
+        if (!this.objectStates.has(seed)) {
+            this.objectStates.set(seed, { cooldown: 0, disabled: false });
         }
-
-        const readings = this.sampleDiagnostics(target);
-        return { def: target.def, seed: target.seed, readings };
+        return this.objectStates.get(seed);
     }
 
-    sampleDiagnostics(target) {
-        const rng = seededRandom(target.seed);
-        return {
-            integrity: Math.floor(60 + rng * 40),
-            risk: Math.floor(5 + rng * 25),
-            output: (0.5 + rng * 4).toFixed(2)
-        };
-    }
-
-    performAction(target, action) {
-        if (!target) return { message: 'No target available.', locked: false };
-        const cooldownKey = `${target.def.id}_${target.seed}`;
-        const now = performance.now();
-        const lockUntil = this.cooldowns.get(cooldownKey) || 0;
-        if (lockUntil > now) {
-            return { message: `Cooling down (${((lockUntil - now) / 1000).toFixed(1)}s)`, locked: true };
+    performAction(def, seed, action, playerState) {
+        const state = this.getState(seed);
+        if (state.disabled) {
+            return { log: `${def.name} is offline.`, state };
+        }
+        if (state.cooldown > 0) {
+            return { log: `${def.name} is recharging (${state.cooldown.toFixed(1)}s).`, state };
         }
 
-        const diagnostics = this.sampleDiagnostics(target);
-        const template = target.def.outcomes?.[action] || `${action} executed.`;
-        const message = template
-            .replace('{integrity}', diagnostics.integrity)
-            .replace('{risk}', diagnostics.risk)
-            .replace('{output}', diagnostics.output);
-
-        const cooldownMs = Math.max(3000, target.def.cooldown * 1000 * 0.25);
-        this.cooldowns.set(cooldownKey, now + cooldownMs);
-
-        return {
-            message,
-            locked: false,
-            cooldown: cooldownMs / 1000,
-            diagnostics
-        };
+        const outcome = evaluateAction(def, action, seed, playerState);
+        state.cooldown = outcome.cooldown || def.cooldown;
+        if (outcome.disabled) state.disabled = true;
+        state.lastOutcome = outcome;
+        return { ...outcome, state };
     }
 }
