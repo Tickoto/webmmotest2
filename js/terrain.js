@@ -35,13 +35,39 @@ export function getTerrainHeight(wx, wz) {
     height += noise2D(wx * 0.05, wz * 0.05) * 4;
     height += noise2D(wx * 0.1, wz * 0.1) * 2;
 
-    const cx = Math.floor(wx / CONFIG.chunkSize);
-    const cz = Math.floor(wz / CONFIG.chunkSize);
+    const chunkSize = CONFIG.chunkSize;
+    const cx = Math.floor(wx / chunkSize);
+    const cz = Math.floor(wz / chunkSize);
     const isCity = hash(cx, cz) > CONFIG.cityThreshold;
+    const cityHeight = 0.5;
 
-    if (isCity) {
-        return 0.5;
-    }
+    let blended = isCity ? cityHeight : height;
 
-    return height;
+    const lx = wx - cx * chunkSize;
+    const lz = wz - cz * chunkSize;
+    const smooth = CONFIG.edgeBlendDistance;
+
+    const neighbors = [
+        { dx: -1, dz: 0, dist: lx },
+        { dx: 1, dz: 0, dist: chunkSize - lx },
+        { dx: 0, dz: -1, dist: lz },
+        { dx: 0, dz: 1, dist: chunkSize - lz },
+        { dx: -1, dz: -1, dist: Math.min(lx, lz) },
+        { dx: 1, dz: -1, dist: Math.min(chunkSize - lx, lz) },
+        { dx: -1, dz: 1, dist: Math.min(lx, chunkSize - lz) },
+        { dx: 1, dz: 1, dist: Math.min(chunkSize - lx, chunkSize - lz) }
+    ];
+
+    neighbors.forEach(n => {
+        if (n.dist > smooth) return;
+
+        const neighborCity = hash(cx + n.dx, cz + n.dz) > CONFIG.cityThreshold;
+        if (neighborCity === isCity) return;
+
+        const targetHeight = neighborCity ? cityHeight : height;
+        const t = Math.min(1, n.dist / smooth);
+        blended = targetHeight + (blended - targetHeight) * t;
+    });
+
+    return blended;
 }

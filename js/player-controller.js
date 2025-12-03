@@ -6,16 +6,25 @@ import { Character } from './character.js';
 // PLAYER CONTROLLER
 // ============================================
 export class PlayerController {
-    constructor({ scene, camera, worldManager, logChat, keys, mouse }) {
+    constructor({ scene, camera, worldManager, logChat, keys, mouse, physics }) {
         this.scene = scene;
         this.camera = camera;
         this.worldManager = worldManager;
         this.logChat = logChat;
         this.keys = keys;
         this.mouse = mouse;
+        this.physics = physics;
 
         this.char = new Character(true);
         this.scene.add(this.char.group);
+
+        this.physicsBody = this.physics.registerBody({
+            position: this.char.group.position,
+            velocity: new THREE.Vector3(),
+            radius: 0.7,
+            height: 1.7,
+            grounded: false
+        });
 
         this.yaw = 0;
         this.pitch = 0;
@@ -42,29 +51,33 @@ export class PlayerController {
         if (this.keys['KeyA']) dx = -1;
         if (this.keys['KeyD']) dx = 1;
 
-        if (dx !== 0 || dz !== 0) {
-            const moveDir = new THREE.Vector3(dx, 0, dz)
-                .normalize()
-                .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-
-            pos.x += moveDir.x * speed * delta;
-            pos.z += moveDir.z * speed * delta;
-            
-            // Character faces camera direction (model faces -Z, so add PI)
-            this.char.group.rotation.y = this.yaw + Math.PI;
-            this.char.animate(speed);
-        } else {
-            this.char.group.rotation.y = this.yaw + Math.PI;
-            this.char.animate(0);
+        const moveDir = new THREE.Vector3(dx, 0, dz);
+        if (moveDir.lengthSq() > 0) {
+            moveDir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
         }
 
-        // Terrain following
-        if (!this.isInInterior) {
-            const terrainY = getTerrainHeight(pos.x, pos.z);
-            pos.y = terrainY;
-        } else {
+        const targetVel = moveDir.multiplyScalar(speed);
+        const accel = this.physicsBody.grounded ? CONFIG.groundAccel : CONFIG.airAccel;
+        const lerpFactor = Math.min(1, accel * delta);
+
+        this.physicsBody.velocity.x = THREE.MathUtils.lerp(this.physicsBody.velocity.x, targetVel.x, lerpFactor);
+        this.physicsBody.velocity.z = THREE.MathUtils.lerp(this.physicsBody.velocity.z, targetVel.z, lerpFactor);
+
+        if (this.keys['Space'] && this.physicsBody.grounded) {
+            this.physicsBody.velocity.y = CONFIG.jumpSpeed;
+            this.physicsBody.grounded = false;
+        }
+
+        // Face camera direction (model faces -Z, so add PI)
+        this.char.group.rotation.y = this.yaw + Math.PI;
+        this.char.animate(targetVel.length());
+
+        if (this.isInInterior) {
             if (pos.y < 500) pos.y = 500;
         }
+
+        const terrainSampler = (x, z) => this.isInInterior ? 500 : getTerrainHeight(x, z);
+        this.physics.step(delta, terrainSampler);
 
         // Camera behind player
         const camDist = 7;
@@ -109,6 +122,7 @@ export class PlayerController {
 
         this.worldManager.createInterior(ix, iy, ix, seed);
         this.char.group.position.set(ix, iy + 1, ix);
+        this.physicsBody.velocity.set(0, 0, 0);
         this.isInInterior = true;
 
         this.logChat('System', 'Entering building...');
@@ -121,6 +135,7 @@ export class PlayerController {
         } else {
             this.char.group.position.set(0, 0, 0);
         }
+        this.physicsBody.velocity.set(0, 0, 0);
         this.isInInterior = false;
 
         this.logChat('System', 'Exiting building...');

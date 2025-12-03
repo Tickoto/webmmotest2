@@ -4,7 +4,11 @@ export const CONFIG = {
     cityThreshold: 0.45,
     gravity: 40.0,
     speed: 20.0,
-    runSpeed: 35.0
+    runSpeed: 35.0,
+    jumpSpeed: 14.0,
+    groundAccel: 8.0,
+    airAccel: 3.5,
+    edgeBlendDistance: 18
 };
 
 export const FACTIONS = [
