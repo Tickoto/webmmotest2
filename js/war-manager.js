@@ -32,11 +32,11 @@ export class WarManager {
                 const dir = new THREE.Vector3()
                     .subVectors(enemy.mesh.position, unit.mesh.position);
                 dir.y = 0;
-                
+
                 if (dir.length() > 0.1) {
                     const targetAngle = Math.atan2(dir.x, dir.z);
                     unit.mesh.rotation.y = targetAngle;
-                    
+
                     const dist = unit.mesh.position.distanceTo(enemy.mesh.position);
                     if (dist > 50) {
                         dir.normalize();
@@ -60,10 +60,14 @@ export class WarManager {
                 unit.mesh.position.add(forward.multiplyScalar(unit.speed * 0.3 * delta));
             }
 
-            // Ground collision for tanks - snap to terrain
             if (unit.type === 'tank') {
                 const terrainY = getTerrainHeight(unit.mesh.position.x, unit.mesh.position.z);
-                unit.mesh.position.y = terrainY + 1.25; // Tank half-height
+                const desiredY = terrainY + 1.25;
+                if (unit.mesh.position.y < desiredY - 0.05) {
+                    unit.mesh.position.y = desiredY;
+                } else {
+                    unit.mesh.position.y = THREE.MathUtils.lerp(unit.mesh.position.y, desiredY, 0.35);
+                }
             }
 
             if (unit.mesh.position.distanceTo(playerPos) > 500) {
@@ -150,7 +154,6 @@ export class WarManager {
             trackR.position.set(-2.5, 0.75, 0);
             group.add(trackR);
 
-            // Spawn at terrain height
             const terrainY = getTerrainHeight(x, z);
             group.position.set(x, terrainY + 1.25, z);
         }
@@ -168,7 +171,7 @@ export class WarManager {
     findEnemy(unit) {
         let nearest = null;
         let nearestDist = Infinity;
-        
+
         for (const other of this.units) {
             if (other.faction !== unit.faction) {
                 const dist = unit.mesh.position.distanceTo(other.mesh.position);

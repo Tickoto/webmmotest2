@@ -2,6 +2,8 @@ import { CONFIG } from './config.js';
 import { hash } from './terrain.js';
 import { Character } from './character.js';
 
+let interactionCallbacks = null;
+
 export function logChat(user, msg) {
     const log = document.getElementById('chat-log');
     const div = document.createElement('div');
@@ -134,4 +136,70 @@ function setupCreatorControls(previewChar) {
             });
         }
     });
+}
+
+export function showInteractionPanel(target, onAction, onClose) {
+    const panel = document.getElementById('interaction-panel');
+    const title = document.getElementById('interaction-title');
+    const desc = document.getElementById('interaction-desc');
+    const actions = document.getElementById('interaction-actions');
+    const status = document.getElementById('interaction-status');
+
+    interactionCallbacks = { onAction, onClose, target };
+
+    title.textContent = `${target.def.name} (${target.def.rarity})`;
+    const infoLines = [
+        target.locked ? `Cooldown: ${target.remaining}s` : 'Online',
+        `Energy: ${target.def.energy}mw`,
+        `Category: ${target.def.category}`
+    ];
+    if (target.readings) {
+        infoLines.push(`Integrity ${target.readings.integrity}% | Risk ${target.readings.risk}`);
+    }
+    desc.textContent = infoLines.join(' • ');
+    status.textContent = target.locked ? 'Awaiting reset...' : 'Ready.';
+
+    actions.innerHTML = '';
+    if (target.def.actions) {
+        target.def.actions.forEach(action => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = action.toUpperCase();
+            btn.disabled = !!target.locked;
+            btn.addEventListener('click', () => handleAction(action));
+            actions.appendChild(btn);
+        });
+    }
+
+    panel.style.display = 'block';
+    panel.dataset.visible = 'true';
+}
+
+export function hideInteractionPanel() {
+    const panel = document.getElementById('interaction-panel');
+    if (!panel) return;
+    panel.style.display = 'none';
+    panel.dataset.visible = 'false';
+    interactionCallbacks = null;
+}
+
+function handleAction(action) {
+    if (!interactionCallbacks || !interactionCallbacks.onAction) return;
+    interactionCallbacks.onAction(action, interactionCallbacks.target);
+}
+
+export function updateInteractionStatus(text) {
+    const status = document.getElementById('interaction-status');
+    if (status) status.textContent = text;
+}
+
+export function showInteractionPrompt(text) {
+    const prompt = document.getElementById('interaction-prompt');
+    prompt.style.display = 'block';
+    prompt.textContent = text;
+}
+
+export function hideInteractionPrompt() {
+    const prompt = document.getElementById('interaction-prompt');
+    prompt.style.display = 'none';
 }

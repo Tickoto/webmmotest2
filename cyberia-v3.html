@@ -73,6 +73,19 @@
             color: white; font-size: 1.5em; display: none;
         }
 
+        #interaction-panel {
+            position: absolute; bottom: 40%; left: 50%; transform: translateX(-50%);
+            width: 480px; background: rgba(8,12,16,0.92); border: 2px solid #55aaff; padding: 14px;
+            display: none; pointer-events: auto; box-shadow: 0 0 18px rgba(0,0,0,0.8);
+        }
+        #interaction-title { font-size: 1.6em; color: #fff; margin-bottom: 4px; }
+        #interaction-desc { color: #99ccff; font-size: 1.1em; margin-bottom: 8px; }
+        #interaction-status { color: #66ff99; font-size: 1em; margin-bottom: 10px; }
+        #interaction-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .action-btn { padding: 8px 12px; background: #223; color: #aeeaff; border: 1px solid #446; font-family: 'VT323'; cursor: pointer; }
+        .action-btn:hover { background: #335; }
+        .action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
         #char-creator {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #111;
@@ -234,6 +247,12 @@
         </div>
 
     <div id="interaction-prompt">[E] INTERACT</div>
+    <div id="interaction-panel">
+        <div id="interaction-title">SYSTEM NODE</div>
+        <div id="interaction-desc">Awaiting input...</div>
+        <div id="interaction-status">Standby</div>
+        <div id="interaction-actions"></div>
+    </div>
 </div>
 
 <script type="module" src="./js/main.js"></script>

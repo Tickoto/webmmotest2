@@ -78,60 +78,77 @@ function riverMask(wx, wz) {
     return Math.pow(1 - flow, 2);
 }
 
+function zoneField(wx, wz) {
+    const coarse = perlin(wx * 0.002, wz * 0.002);
+    const warp = perlin((wx + 700) * 0.006, (wz - 1200) * 0.006);
+    const combined = (coarse * 0.65 + warp * 0.35);
+    return combined;
+}
+
+function blendedBiome(wx, wz) {
+    const size = CONFIG.chunkSize;
+    const cx = Math.floor(wx / size);
+    const cz = Math.floor(wz / size);
+    const biome = biomeAt(cx, cz);
+    const neighbors = [
+        biomeAt(cx + 1, cz),
+        biomeAt(cx - 1, cz),
+        biomeAt(cx, cz + 1),
+        biomeAt(cx, cz - 1)
+    ];
+
+    const lx = wx - cx * size;
+    const lz = wz - cz * size;
+    const tx = Math.min(lx / size, 1 - lx / size);
+    const tz = Math.min(lz / size, 1 - lz / size);
+    const edge = Math.min(tx, tz);
+    const blendStrength = THREE.MathUtils.smoothstep(edge, 0, CONFIG.edgeBlendDistance / size);
+
+    const mixTarget = neighbors[Math.floor(hash(cx, cz) * neighbors.length)];
+    return blendBiomes(biome, mixTarget, blendStrength);
+}
+
+function blendBiomes(a, b, t) {
+    if (!b) return a;
+    return {
+        key: `${a.key}_${b.key}`,
+        label: t > 0.5 ? b.label : a.label,
+        primaryColor: t > 0.5 ? b.primaryColor : a.primaryColor,
+        altitudeBias: lerp(a.altitudeBias, b.altitudeBias, t),
+        humidity: lerp(a.humidity, b.humidity, t),
+        flora: t > 0.5 ? b.flora : a.flora,
+        ambientSound: t > 0.5 ? b.ambientSound : a.ambientSound
+    };
+}
+
+function cityMask(wx, wz) {
+    const field = zoneField(wx, wz);
+    const edgeNoise = perlin(wx * 0.01, wz * 0.01) * 0.25;
+    const intensity = THREE.MathUtils.clamp((field + edgeNoise) * 0.6 + 0.3, -1, 1);
+    const mask = THREE.MathUtils.smoothstep(intensity, CONFIG.cityThreshold - 0.15, CONFIG.cityThreshold + 0.15);
+    return mask;
+}
+
 export function getTerrainHeight(wx, wz) {
-    const chunkSize = CONFIG.chunkSize;
-    const cx = Math.floor(wx / chunkSize);
-    const cz = Math.floor(wz / chunkSize);
-    const lx = wx - cx * chunkSize;
-    const lz = wz - cz * chunkSize;
-    const smooth = CONFIG.edgeBlendDistance;
+    const biome = blendedBiome(wx, wz);
+    const cityInfluence = cityMask(wx, wz);
 
     const baseHeight = fbm(wx * 0.01, wz * 0.01, 5, 2, 0.45) * 12;
     const detail = fbm(wx * 0.04, wz * 0.04, 3, 2.7, 0.5) * 2.5;
     const ridgeHeight = ridge(Math.abs(perlin(wx * 0.02, wz * 0.02))) * 6;
 
-    const biome = biomeAt(cx, cz);
     const biomeOffset = biome.altitudeBias * 10;
+    const riverInfluence = riverMask(wx, wz) * -5;
 
-    const waterInfluence = riverMask(wx, wz) * -5;
-    let height = baseHeight + detail + ridgeHeight + biomeOffset + waterInfluence;
+    let height = baseHeight + detail + ridgeHeight + biomeOffset + riverInfluence;
 
-    const isCity = hash(cx, cz) > CONFIG.cityThreshold;
-    const cityHeight = 0.5;
-    let blended = isCity ? cityHeight : height;
+    const urbanPlateau = THREE.MathUtils.lerp(height, 0.75, cityInfluence);
+    const blend = THREE.MathUtils.smoothstep(cityInfluence, 0.28, 0.7);
 
-    const neighbors = [
-        { dx: -1, dz: 0, dist: lx },
-        { dx: 1, dz: 0, dist: chunkSize - lx },
-        { dx: 0, dz: -1, dist: lz },
-        { dx: 0, dz: 1, dist: chunkSize - lz },
-        { dx: -1, dz: -1, dist: Math.min(lx, lz) },
-        { dx: 1, dz: -1, dist: Math.min(chunkSize - lx, lz) },
-        { dx: -1, dz: 1, dist: Math.min(lx, chunkSize - lz) },
-        { dx: 1, dz: 1, dist: Math.min(chunkSize - lx, chunkSize - lz) }
-    ];
+    height = lerp(height, urbanPlateau, blend);
+    height = Math.max(height, -25);
 
-    neighbors.forEach(n => {
-        if (n.dist > smooth) return;
-        const neighborCity = hash(cx + n.dx, cz + n.dz) > CONFIG.cityThreshold;
-        const targetBiome = biomeAt(cx + n.dx, cz + n.dz);
-        const neighborHeight = fbm((wx + n.dx * chunkSize) * 0.01, (wz + n.dz * chunkSize) * 0.01, 5, 2, 0.45) * 12 +
-            fbm((wx + n.dx * chunkSize) * 0.04, (wz + n.dz * chunkSize) * 0.04, 3, 2.7, 0.5) * 2.5 +
-            ridge(Math.abs(perlin((wx + n.dx * chunkSize) * 0.02, (wz + n.dz * chunkSize) * 0.02))) * 6 +
-            targetBiome.altitudeBias * 10 +
-            riverMask(wx + n.dx * chunkSize, wz + n.dz * chunkSize) * -5;
-
-        if (neighborCity === isCity) {
-            const t = Math.min(1, n.dist / smooth);
-            blended = neighborHeight + (blended - neighborHeight) * t;
-        } else {
-            const targetHeight = neighborCity ? cityHeight : neighborHeight;
-            const t = Math.min(1, n.dist / smooth);
-            blended = targetHeight + (blended - targetHeight) * t;
-        }
-    });
-
-    return blended;
+    return height;
 }
 
 export function biomeInfoAtPosition(wx, wz) {
